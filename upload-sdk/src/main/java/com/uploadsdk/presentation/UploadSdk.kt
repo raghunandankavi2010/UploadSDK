@@ -72,8 +72,9 @@ class UploadSdk private constructor(
                 com.uploadsdk.data.scheduler.BatteryAwareConstraint(context),
                 com.uploadsdk.data.scheduler.ThermalThrottlingMonitor(context)
             )
+            val workObserver = com.uploadsdk.data.worker.UploadWorkObserver(context)
             val repository = com.uploadsdk.data.repository.UploadRepositoryImpl(
-                context, database, preprocessor, chunkEngine, scheduler
+                context, database, preprocessor, chunkEngine, scheduler, workObserver
             )
             val useCase = com.uploadsdk.domain.usecase.UploadUseCase(repository)
             val uploadManager = UploadManager(useCase)

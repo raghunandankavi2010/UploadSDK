@@ -39,7 +39,7 @@ class UploadWorker @AssistedInject constructor(
     private val notificationManager: UploadNotificationManager,
     private val analytics: UploadAnalytics,
     private val database: UploadDatabase
-) : CoroutineWorker(applicationContext, params) {
+) : CoroutineWorker(context, params) {
 
     companion object {
         const val KEY_TASK_ID = "task_id"

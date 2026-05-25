@@ -1,8 +1,10 @@
 package com.uploadsdk.di
 
 import android.content.Context
-import androidx.work.Configuration
 import androidx.work.WorkManager
+import com.uploadsdk.util.NoOpUploadAnalytics
+import com.uploadsdk.util.UploadAnalytics
+import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -12,11 +14,17 @@ import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
-object UploadSdkModule {
+abstract class UploadSdkModule {
 
-    @Provides
+    @Binds
     @Singleton
-    fun provideWorkManager(@ApplicationContext context: Context): WorkManager {
-        return WorkManager.getInstance(context)
+    abstract fun bindUploadAnalytics(analytics: NoOpUploadAnalytics): UploadAnalytics
+
+    companion object {
+        @Provides
+        @Singleton
+        fun provideWorkManager(@ApplicationContext context: Context): WorkManager {
+            return WorkManager.getInstance(context)
+        }
     }
 }

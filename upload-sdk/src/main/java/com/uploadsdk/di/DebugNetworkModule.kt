@@ -18,6 +18,7 @@ object DebugNetworkModule {
 
     @Provides
     @Singleton
+    @MockApi
     fun provideUploadApiService(): UploadApiService {
         return MockUploadApiService()
     }

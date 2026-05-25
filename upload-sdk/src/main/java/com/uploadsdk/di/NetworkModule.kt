@@ -1,5 +1,6 @@
 package com.uploadsdk.di
 
+import com.uploadsdk.config.UploadConfig
 import com.uploadsdk.data.remote.api.UploadApiService
 import com.uploadsdk.data.remote.interceptor.AuthInterceptor
 import dagger.Module
@@ -45,7 +46,18 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    @RealApi
     fun provideUploadApiService(retrofit: Retrofit): UploadApiService {
         return retrofit.create(UploadApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideDefaultUploadApiService(
+        @RealApi realApi: UploadApiService,
+        @MockApi mockApi: UploadApiService,
+        config: UploadConfig
+    ): UploadApiService {
+        return if (config.useMockApi) mockApi else realApi
     }
 }

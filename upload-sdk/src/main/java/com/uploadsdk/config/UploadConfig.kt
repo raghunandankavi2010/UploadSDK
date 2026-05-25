@@ -11,6 +11,7 @@ data class UploadConfig(
     val thermalThrottling: Boolean = true,
     val networkType: NetworkType = NetworkType.ANY,
     val timeoutMs: Long = 30000L,
+    val useMockApi: Boolean = false,
     val authTokenProvider: (() -> String)? = null
 ) {
     enum class NetworkType {

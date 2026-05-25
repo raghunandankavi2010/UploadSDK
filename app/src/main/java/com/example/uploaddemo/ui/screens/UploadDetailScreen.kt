@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,9 +18,12 @@ import com.example.uploaddemo.ui.theme.UploadBlue
 import com.example.uploaddemo.ui.theme.UploadGreen
 import com.example.uploaddemo.ui.theme.UploadGray
 import com.example.uploaddemo.viewmodel.UploadDetailViewModel
+import androidx.compose.ui.tooling.preview.Preview
+import com.example.uploaddemo.ui.theme.UploadDemoTheme
+import com.uploadsdk.data.local.entity.ChunkEntity
+import com.uploadsdk.data.local.entity.UploadTaskEntity
 import com.uploadsdk.util.FileSizeFormatter
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UploadDetailScreen(
     taskId: String,
@@ -34,13 +37,27 @@ fun UploadDetailScreen(
         viewModel.loadTask(taskId)
     }
 
+    UploadDetailContent(
+        upload = upload,
+        chunks = chunks,
+        onBackClick = { navController.popBackStack() }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun UploadDetailContent(
+    upload: UploadTaskEntity?,
+    chunks: List<ChunkEntity>,
+    onBackClick: () -> Unit
+) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Upload Details") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -72,11 +89,11 @@ fun UploadDetailScreen(
                         InfoRow("Chunks", "${task.currentChunk}/${task.totalChunks}")
                         InfoRow("Retries", "${task.retryCount}/${task.maxRetries}")
                         InfoRow("Speed", FileSizeFormatter.formatSpeed(task.speedKbps))
-                        if (task.remoteUrl != null) {
-                            InfoRow("URL", task.remoteUrl)
+                        task.remoteUrl?.let { url ->
+                            InfoRow("URL", url)
                         }
-                        if (task.errorMessage != null) {
-                            InfoRow("Error", task.errorMessage, isError = true)
+                        task.errorMessage?.let { error ->
+                            InfoRow("Error", error, isError = true)
                         }
                     }
                 }
@@ -129,7 +146,7 @@ fun InfoRow(label: String, value: String, isError: Boolean = false) {
 }
 
 @Composable
-fun ChunkItem(chunk: com.uploadsdk.data.local.entity.ChunkEntity) {
+fun ChunkItem(chunk: ChunkEntity) {
     val statusColor = if (chunk.isUploaded) UploadGreen else UploadGray
     val statusText = if (chunk.isUploaded) "Uploaded" else "Pending"
 
@@ -168,5 +185,38 @@ fun ChunkItem(chunk: com.uploadsdk.data.local.entity.ChunkEntity) {
                 )
             }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun UploadDetailScreenPreview() {
+    UploadDemoTheme {
+        val sampleTask = UploadTaskEntity(
+            taskId = "1",
+            filePath = "/storage/emulated/0/Download/video.mp4",
+            fileName = "video.mp4",
+            mimeType = "video/mp4",
+            totalBytes = 1024 * 1024 * 10,
+            chunkSize = 1024 * 1024,
+            priority = "NORMAL",
+            statusType = "IN_PROGRESS",
+            progressPercent = 45,
+            bytesUploaded = 1024 * 1024 * 4,
+            currentChunk = 4,
+            totalChunks = 10,
+            speedKbps = 512.0
+        )
+        val sampleChunks = listOf(
+            ChunkEntity("1", 0, 0, 1024 * 1024 - 1, isUploaded = true),
+            ChunkEntity("1", 1, 1024 * 1024, 2 * 1024 * 1024 - 1, isUploaded = true),
+            ChunkEntity("1", 2, 2 * 1024 * 1024, 3 * 1024 * 1024 - 1, isUploaded = true),
+            ChunkEntity("1", 3, 3 * 1024 * 1024, 4 * 1024 * 1024 - 1, isUploaded = false)
+        )
+        UploadDetailContent(
+            upload = sampleTask,
+            chunks = sampleChunks,
+            onBackClick = {}
+        )
     }
 }

@@ -1,5 +1,6 @@
 package com.uploadsdk.di
 
+import com.uploadsdk.BuildConfig
 import com.uploadsdk.config.UploadConfig
 import dagger.Module
 import dagger.Provides
@@ -23,7 +24,8 @@ object ConfigModule {
             batteryAware = true,
             thermalThrottling = true,
             networkType = UploadConfig.NetworkType.ANY,
-            timeoutMs = 30000L
+            timeoutMs = 30000L,
+            useMockApi = BuildConfig.DEBUG
         )
     }
 }
