@@ -1,5 +1,6 @@
 package com.uploadsdk.data.preprocessor
 
+import com.uploadsdk.data.scheduler.UploadQueueManager
 import com.uploadsdk.util.UploadException
 import java.io.File
 import javax.inject.Inject

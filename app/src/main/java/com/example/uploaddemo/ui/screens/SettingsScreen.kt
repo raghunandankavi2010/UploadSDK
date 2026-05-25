@@ -124,9 +124,7 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Version 1.0.0
-Based on Rahul Ray's System Design
-Chunked Resumable Uploads with WorkManager",
+                        text = "Version 1.0.0 ased on Rahul Ray's System Design Chunked Resumable Uploads with WorkManager",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
