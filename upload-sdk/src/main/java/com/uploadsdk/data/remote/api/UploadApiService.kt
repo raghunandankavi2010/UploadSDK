@@ -30,8 +30,3 @@ interface UploadApiService {
     @POST("upload/session/refresh")
     suspend fun refreshSession(@Body request: RefreshSessionRequest): Response<InitUploadResponse>
 }
-
-data class RefreshSessionRequest(
-    val sessionId: String,
-    val taskId: String
-)

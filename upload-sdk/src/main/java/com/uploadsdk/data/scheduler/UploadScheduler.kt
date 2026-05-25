@@ -5,6 +5,8 @@ import androidx.work.*
 import com.uploadsdk.data.worker.UploadWorker
 import com.uploadsdk.domain.model.UploadPriority
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.mapNotNull
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -71,8 +73,9 @@ class UploadScheduler @Inject constructor(
         WorkManager.getInstance(context).cancelUniqueWork("upload_$taskId")
     }
 
-    fun observeUploadWork(taskId: String): LiveData<WorkInfo> {
+    fun observeUploadWork(taskId: String): Flow<WorkInfo> {
         return WorkManager.getInstance(context)
-            .getWorkInfoForUniqueWorkLiveData("upload_$taskId")
+            .getWorkInfosForUniqueWorkFlow("upload_$taskId")
+            .mapNotNull { it.firstOrNull() }
     }
 }

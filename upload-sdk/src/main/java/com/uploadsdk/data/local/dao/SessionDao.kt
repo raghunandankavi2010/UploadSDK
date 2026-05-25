@@ -11,6 +11,9 @@ interface SessionDao {
     @Query("SELECT * FROM upload_sessions WHERE taskId = :taskId")
     suspend fun getByTaskId(taskId: String): SessionEntity?
 
+    @Query("SELECT * FROM upload_sessions WHERE sessionId = :sessionId")
+    suspend fun getBySessionId(sessionId: String): SessionEntity?
+
     @Query("DELETE FROM upload_sessions WHERE taskId = :taskId")
     suspend fun deleteByTaskId(taskId: String)
 

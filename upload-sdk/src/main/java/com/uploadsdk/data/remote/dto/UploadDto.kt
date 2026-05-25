@@ -17,6 +17,11 @@ data class ChunkUploadRequest(
     val checksum: String? = null
 )
 
+data class RefreshSessionRequest(
+    val sessionId: String,
+    val taskId: String
+)
+
 data class CommitUploadRequest(
     val taskId: String,
     val sessionId: String,
