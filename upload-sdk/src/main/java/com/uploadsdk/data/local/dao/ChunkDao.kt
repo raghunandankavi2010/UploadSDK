@@ -14,8 +14,11 @@ interface ChunkDao {
     @Query("SELECT * FROM upload_chunks WHERE taskId = :taskId AND isUploaded = 0 ORDER BY chunkIndex ASC LIMIT 1")
     suspend fun getNextPendingChunk(taskId: String): ChunkEntity?
 
-    @Query("UPDATE upload_chunks SET isUploaded = 1, eTag = :eTag WHERE taskId = :taskId AND chunkIndex = :chunkIndex")
+    @Query("UPDATE upload_chunks SET isUploaded = 1, eTag = :eTag, lastErrorMessage = NULL WHERE taskId = :taskId AND chunkIndex = :chunkIndex")
     suspend fun markUploaded(taskId: String, chunkIndex: Int, eTag: String)
+
+    @Query("UPDATE upload_chunks SET lastErrorMessage = :errorMessage WHERE taskId = :taskId AND chunkIndex = :chunkIndex")
+    suspend fun markFailed(taskId: String, chunkIndex: Int, errorMessage: String)
 
     @Query("SELECT COUNT(*) FROM upload_chunks WHERE taskId = :taskId AND isUploaded = 1")
     suspend fun getUploadedCount(taskId: String): Int

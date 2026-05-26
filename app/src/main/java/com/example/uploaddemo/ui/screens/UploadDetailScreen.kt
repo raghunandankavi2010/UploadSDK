@@ -147,41 +147,50 @@ fun InfoRow(label: String, value: String, isError: Boolean = false) {
 
 @Composable
 fun ChunkItem(chunk: ChunkEntity) {
-    val statusColor = if (chunk.isUploaded) UploadGreen else UploadGray
-    val statusText = if (chunk.isUploaded) "Uploaded" else "Pending"
+    val statusColor = if (chunk.isUploaded) UploadGreen else if (chunk.lastErrorMessage != null) MaterialTheme.colorScheme.error else UploadGray
+    val statusText = if (chunk.isUploaded) "Uploaded" else if (chunk.lastErrorMessage != null) "Failed" else "Pending"
 
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(12.dp)
         ) {
-            Column {
-                Text(
-                    text = "Chunk ${chunk.chunkIndex}",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = "${FileSizeFormatter.format(chunk.startByte)} - ${FileSizeFormatter.format(chunk.endByte)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "Chunk ${chunk.chunkIndex}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "${FileSizeFormatter.format(chunk.startByte)} - ${FileSizeFormatter.format(chunk.endByte)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = statusColor
+                    )
+                }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .padding(end = 4.dp)
-                )
+            chunk.lastErrorMessage?.let { error ->
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = statusText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = statusColor
+                    text = "Error: $error",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

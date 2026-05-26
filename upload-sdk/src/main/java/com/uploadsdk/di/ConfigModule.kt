@@ -16,8 +16,8 @@ object ConfigModule {
     @Singleton
     fun provideUploadConfig(): UploadConfig {
         return UploadConfig(
-            baseUrl = "http://10.0.2.2:3000/",
-            chunkSize = 2 * 1024 * 1024,
+            baseUrl = "http://10.0.2.2:5000/api/v1/",
+            chunkSize = 1024 * 1024, // 1MB chunks for faster local testing
             maxRetries = 3,
             parallelUploads = 3,
             enableThumbnail = true,
@@ -25,7 +25,7 @@ object ConfigModule {
             thermalThrottling = true,
             networkType = UploadConfig.NetworkType.ANY,
             timeoutMs = 30000L,
-            useMockApi = BuildConfig.DEBUG
+            useMockApi = false
         )
     }
 }

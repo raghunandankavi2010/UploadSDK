@@ -64,9 +64,12 @@ class ChunkUploader @Inject constructor(
                 chunkDao.markUploaded(taskId, chunk.chunkIndex, eTag)
                 Result.success(eTag)
             } else {
-                Result.failure(Exception("Chunk upload failed: ${response.errorBody()?.string()}"))
+                val errorMsg = response.errorBody()?.string() ?: "Unknown error"
+                chunkDao.markFailed(taskId, chunk.chunkIndex, errorMsg)
+                Result.failure(Exception("Chunk upload failed: $errorMsg"))
             }
         } catch (e: Exception) {
+            chunkDao.markFailed(taskId, chunk.chunkIndex, e.message ?: "Exception occurred")
             Result.failure(e)
         }
     }

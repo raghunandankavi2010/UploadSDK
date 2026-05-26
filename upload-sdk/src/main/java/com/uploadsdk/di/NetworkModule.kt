@@ -36,9 +36,9 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideRetrofit(client: OkHttpClient): Retrofit {
+    fun provideRetrofit(client: OkHttpClient, config: UploadConfig): Retrofit {
         return Retrofit.Builder()
-            .baseUrl("https://your-api-base-url.com/api/v1/")
+            .baseUrl(config.baseUrl)
             .client(client)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
