@@ -21,13 +21,14 @@ class SessionManager @Inject constructor(
         taskId: String,
         fileName: String,
         totalBytes: Long,
+        totalChunks: Int,
         checksum: String
     ): SessionInfo {
         val request = InitUploadRequest(
             fileName = fileName,
             mimeType = "application/octet-stream",
             totalBytes = totalBytes,
-            totalChunks = 0, // Will be updated
+            totalChunks = totalChunks,
             checksum = checksum
         )
         val response = apiService.initUpload(request)

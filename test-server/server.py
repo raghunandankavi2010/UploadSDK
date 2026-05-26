@@ -28,14 +28,14 @@ def init_upload():
         'total_chunks': total_chunks,
         'total_bytes': data.get('totalBytes')
     }
-    chunks[task_id] = [None] * total_chunks
+    chunks[task_id] = {} # Use dict to store chunk_index -> filepath
 
     print(f"Initialized upload: task_id={task_id}, session_id={session_id}, total_chunks={total_chunks}")
 
     return jsonify({
         'success': True,
         'sessionId': session_id,
-        'uploadUrl': f'http://10.0.2.2:5000/api/v1/upload/chunk',
+        'uploadUrl': f'http://192.168.31.55:5000/api/v1/upload/chunk',
         'expiresAt': 9999999999
     })
 
@@ -60,18 +60,12 @@ def upload_chunk():
     if file.filename == '':
         return jsonify({'success': False, 'message': 'No selected file'}), 400
 
-    # Simulate random failures for testing (optional, disabled by default)
-    # import random
-    # if random.random() < 0.2:
-    #     print(f"Simulating failure for chunk {chunk_index}")
-    #     return jsonify({'success': False, 'message': f'Simulated random server error for chunk {chunk_index}'}), 500
-
     filename = secure_filename(f"{task_id}_{chunk_index}.tmp")
     filepath = os.path.join(UPLOAD_FOLDER, filename)
     file.save(filepath)
 
     if task_id not in chunks:
-        chunks[task_id] = [None] * total_chunks
+        chunks[task_id] = {}
 
     chunks[task_id][chunk_index] = filepath
 
@@ -90,6 +84,7 @@ def commit_upload():
          return jsonify({'success': False, 'message': 'No data provided'}), 400
 
     task_id = data.get('taskId')
+    total_chunks = data.get('totalChunks', 0)
 
     if task_id not in chunks:
         return jsonify({'success': False, 'message': 'Task not found'}), 404
@@ -103,7 +98,8 @@ def commit_upload():
 
     try:
         with open(final_path, 'wb') as outfile:
-            for i, chunk_path in enumerate(chunks[task_id]):
+            for i in range(total_chunks):
+                chunk_path = chunks[task_id].get(i)
                 if chunk_path is None or not os.path.exists(chunk_path):
                     return jsonify({'success': False, 'message': f'Missing chunk {i}'}), 400
                 with open(chunk_path, 'rb') as infile:
@@ -114,7 +110,7 @@ def commit_upload():
 
     return jsonify({
         'success': True,
-        'remoteUrl': f'http://10.0.2.2:5000/uploads/{final_filename}',
+        'remoteUrl': f'http://192.168.31.55:5000/uploads/{final_filename}',
         'fileId': str(uuid.uuid4())
     })
 
@@ -122,9 +118,7 @@ def commit_upload():
 def get_status(task_id):
     uploaded = []
     if task_id in chunks:
-        for i, c in enumerate(chunks[task_id]):
-            if c is not None:
-                uploaded.append(i)
+        uploaded = sorted(list(chunks[task_id].keys()))
 
     return jsonify({
         'taskId': task_id,

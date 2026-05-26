@@ -96,10 +96,10 @@ class UploadWorker @AssistedInject constructor(
                 UploadLogger.d("UploadWorker: Creating/getting session for $taskId")
                 val session = if (isResume) {
                     sessionManager.getSession(taskId) ?: sessionManager.createSession(
-                        taskId, fileName, totalBytes, checksum
+                        taskId, fileName, totalBytes, totalChunks, checksum
                     )
                 } else {
-                    sessionManager.createSession(taskId, fileName, totalBytes, checksum)
+                    sessionManager.createSession(taskId, fileName, totalBytes, totalChunks, checksum)
                 }
                 UploadLogger.d("UploadWorker: Session created: ${session.sessionId}")
 
