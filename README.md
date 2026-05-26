@@ -220,6 +220,81 @@ app/
 Your backend needs these endpoints:
 
 ```
+Install python server 
+a. pip install flask werkzeug
+
+b. put the below code in server.py files and run   
+  python server.py
+
+
+Here is the python code    
+
+import os
+from flask import Flask, request, jsonify
+from werkzeug.utils import secure_filename
+import uuid
+
+app = Flask(__name__)
+UPLOAD_FOLDER = 'uploads'
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+# Storage for active chunks
+chunks = {} # taskId -> list of chunk file paths
+
+@app.route('/api/v1/upload/init', methods=['POST'])
+def init_upload():
+    data = request.json
+    task_id = str(uuid.uuid4())
+    session_id = str(uuid.uuid4())
+    total_chunks = data.get('totalChunks', 0)
+    chunks[task_id] = [None] * total_chunks
+    
+    return jsonify({
+        'success': True,
+        'sessionId': session_id,
+        'uploadUrl': f'http://10.0.2.2:5000/api/v1/upload/chunk',
+        'expiresAt': 9999999999
+    })
+
+@app.route('/api/v1/upload/chunk', methods=['POST'])
+def upload_chunk():
+    task_id = request.form.get('task_id')
+    chunk_index = int(request.form.get('chunk_index'))
+    
+    # --- SIMULATE FAILURE FOR TESTING ---
+    # Uncomment the lines below to test how the SDK captures error messages:
+    # if chunk_index == 1: # Fail the second chunk
+    #     return jsonify({'success': False, 'message': 'Storage quota exceeded for chunk 1'}), 507
+    
+    file = request.files['file']
+    filename = secure_filename(f"{task_id}_{chunk_index}.tmp")
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(filepath)
+    
+    if task_id not in chunks: chunks[task_id] = []
+    chunks[task_id][chunk_index] = filepath
+    
+    return jsonify({'success': True, 'eTag': f"etag_{chunk_index}", 'chunkIndex': chunk_index})
+
+@app.route('/api/v1/upload/commit', methods=['POST'])
+def commit_upload():
+    data = request.json
+    task_id = data.get('taskId')
+    file_name = secure_filename(data.get('fileName', 'output.dat'))
+    final_path = os.path.join(UPLOAD_FOLDER, file_name)
+    
+    with open(final_path, 'wb') as outfile:
+        for path in chunks[task_id]:
+            with open(path, 'rb') as infile:
+                outfile.write(infile.read())
+            os.remove(path) # Clean up
+            
+    return jsonify({'success': True, 'remoteUrl': f'http://10.0.2.2:5000/uploads/{file_name}'})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
+
 POST /api/v1/upload/init        -> Create upload session
 POST /api/v1/upload/chunk       -> Upload chunk (multipart)
 POST /api/v1/upload/commit      -> Finalize upload
