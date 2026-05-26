@@ -36,6 +36,59 @@ Based on Rahul Ray's system design principles for mobile upload SDKs.
                 | Offset Tracking      |
                 | Checksum Verify      |
                 +----------------------+
+
+                ┌─────────────────────────────────────────────────────────────────────────────┐
+│                            ANDROID APP LAYER                                │
+│  (UI Components: UploadDetailScreen, UploadListScreen, ViewModel)           │
+└───────────────────────┬─────────────────────────────────────────────────────┘
+                        │ 1. uploadFile(file)
+                        ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            SDK PRESENTATION LAYER                           │
+│  (UploadManager.kt: Entry point for the developer using the SDK)            │
+└───────────────────────┬─────────────────────────────────────────────────────┘
+                        │ 2. invoke(task)
+                        ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            SDK DOMAIN LAYER                                 │
+│  (UploadUseCase.kt: Orchestrates business logic and repository calls)       │
+└───────────────────────┬─────────────────────────────────────────────────────┘
+                        │ 3. enqueueUpload(task)
+                        ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            SDK DATA LAYER (Internal)                        │
+│                                                                             │
+│  ┌───────────────────┐      ┌──────────────────┐      ┌──────────────────┐  │
+│  │ FilePreprocessor  │ ◄─── │UploadRepository  │ ───► │   ChunkEngine    │  │
+│  │ (Checksum/Thumb)  │      │      Impl        │      │ (File Splitting) │  │
+│  └───────────────────┘      └────────┬─────────┘      └──────────────────┘  │
+│                                      │                                      │
+│               4. Save Task/Chunks    │   5. Schedule via WorkManager        │
+│                                      ▼                                      │
+│  ┌───────────────────┐      ┌──────────────────┐      ┌──────────────────┐  │
+│  │   Room Database   │ ◄─── │   UploadWorker   │ ───► │  Notifications   │  │
+│  │ (Task/Chunk DTOs) │      │ (CoroutineWorker)│      │  (Manager/UI)    │  │
+│  └─────────▲─────────┘      └────────┬─────────┘      └──────────────────┘  │
+│            │                         │                                      │
+│            │ 7. Mark Chunk Done/Fail │ 6. Loop: uploadChunk()               │
+│            └─────────────────────────┼──────────────────┐                   │
+│                                      ▼                  │                   │
+│  ┌───────────────────┐      ┌──────────────────┐        │                   │
+│  │  SessionManager   │ ◄─── │  ChunkUploader   │ ◄──────┘                   │
+│  │  (Auth/Sessions)  │      │ (Retrofit Calls) │                            │
+│  └───────────────────┘      └────────┬─────────┘                            │
+│                                      │                                      │
+└──────────────────────────────────────┼──────────────────────────────────────┘
+                                       │ 8. HTTP Requests (Multipart)
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            TEST SERVER (Flask)                              │
+│                                                                             │
+│  ┌───────────────────┐      ┌──────────────────┐      ┌──────────────────┐  │
+│  │  /upload/init     │ ───► │  /upload/chunk   │ ───► │  /upload/commit  │  │
+│  │ (Session Start)   │      │ (Save .tmp file) │      │ (Merge Chunks)   │  │
+│  └───────────────────┘      └──────────────────┘      └──────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Features
