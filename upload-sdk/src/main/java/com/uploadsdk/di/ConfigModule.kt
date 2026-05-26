@@ -16,8 +16,8 @@ object ConfigModule {
     @Singleton
     fun provideUploadConfig(): UploadConfig {
         return UploadConfig(
-            baseUrl = "https://your-api-base-url.com/api/v1/",
-            chunkSize = 8 * 1024 * 1024,
+            baseUrl = "http://10.0.2.2:3000/",
+            chunkSize = 2 * 1024 * 1024,
             maxRetries = 3,
             parallelUploads = 3,
             enableThumbnail = true,

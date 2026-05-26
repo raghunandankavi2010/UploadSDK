@@ -1,9 +1,9 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
-    id("com.android.library")
-    id("org.jetbrains.kotlin.android")
-    id("com.google.devtools.ksp")
-    id("com.google.dagger.hilt.android")
-    id("kotlin-kapt")
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
 }
 
 android {
@@ -29,9 +29,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         buildConfig = true
     }
@@ -43,41 +40,47 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
 dependencies {
     // Kotlin & Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.core)
 
     // AndroidX
-    implementation("androidx.core:core-ktx:1.12.0")
-    implementation("androidx.startup:startup-runtime:1.1.1")
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.startup)
 
     // WorkManager
-    implementation("androidx.work:work-runtime-ktx:2.9.0")
-    implementation("androidx.hilt:hilt-work:1.1.0")
-    kapt("androidx.hilt:hilt-compiler:1.1.0")
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work.sdk)
+    ksp(libs.androidx.hilt.compiler.sdk)
 
     // Room
-    api("androidx.room:room-runtime:2.6.1")
-    api("androidx.room:room-ktx:2.6.1")
-    ksp("androidx.room:room-compiler:2.6.1")
+    api(libs.androidx.room.runtime)
+    api(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 
     // Retrofit & OkHttp
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.gson)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging.interceptor)
 
     // Hilt
-    implementation("com.google.dagger:hilt-android:2.50")
-    kapt("com.google.dagger:hilt-compiler:2.50")
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
 
     // Gson
-    implementation("com.google.code.gson:gson:2.10.1")
+    implementation(libs.gson)
 
     // Testing
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.espresso.core)
 }

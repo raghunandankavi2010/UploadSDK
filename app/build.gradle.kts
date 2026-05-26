@@ -1,19 +1,20 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-    id("com.google.dagger.hilt.android")
-    id("kotlin-kapt")
-    id("org.jetbrains.kotlin.plugin.compose")
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.hilt)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.compose.compiler)
 }
 
 android {
     namespace = "com.example.uploaddemo"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.example.uploaddemo"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -32,9 +33,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
     }
@@ -45,46 +43,51 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
 dependencies {
     implementation(project(":upload-sdk"))
 
-    implementation("androidx.core:core-ktx:1.12.0")
-    implementation("androidx.hilt:hilt-work:1.3.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.activity:activity-compose:1.8.2")
-    implementation(platform("androidx.compose:compose-bom:2024.02.00"))
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.ui)
+    implementation(libs.androidx.ui.graphics)
+    implementation(libs.androidx.ui.tooling.preview)
+    implementation(libs.androidx.material3)
+    implementation(libs.androidx.material.icons.extended)
 
     // Navigation
-    implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation(libs.androidx.navigation.compose)
 
     // ViewModel Compose
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
-    implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.hilt.navigation.compose)
 
     // Hilt
-    implementation("com.google.dagger:hilt-android:2.50")
-    kapt("com.google.dagger:hilt-compiler:2.50")
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
 
     // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation(libs.kotlinx.coroutines.android)
 
     // Coil
-    implementation("io.coil-kt:coil-compose:2.5.0")
+    implementation(libs.coil.compose)
+    implementation(libs.androidx.work.runtime.ktx)
 
-    // WorkManager (for observing in UI)
-    implementation("androidx.work:work-runtime-ktx:2.9.0")
-
-    testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2024.02.00"))
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.espresso.core)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.ui.test.junit4)
+    debugImplementation(libs.androidx.ui.tooling)
+    debugImplementation(libs.androidx.ui.test.manifest)
 }
