@@ -37,7 +37,7 @@ class UploadSdk private constructor(
         return uploadManager.observeUpload(taskId)
     }
 
-    fun observeAllUploads(): Flow<List<UploadResult.Progress>> {
+    fun observeAllUploads(): Flow<List<UploadResult>> {
         return uploadManager.observeAllUploads()
     }
 

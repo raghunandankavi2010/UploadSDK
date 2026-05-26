@@ -1,26 +1,52 @@
 package com.uploadsdk.domain.model
 
 sealed class UploadResult {
-    data class Enqueued(val taskId: String) : UploadResult()
-    data class Preprocessing(val taskId: String, val stage: String) : UploadResult()
+    abstract val taskId: String
+    abstract val fileName: String
+
+    data class Enqueued(
+        override val taskId: String,
+        override val fileName: String = ""
+    ) : UploadResult()
+
+    data class Preprocessing(
+        override val taskId: String,
+        override val fileName: String = "",
+        val stage: String
+    ) : UploadResult()
+
     data class Progress(
-        val taskId: String,
+        override val taskId: String,
+        override val fileName: String = "",
         val percent: Int,
         val bytesUploaded: Long,
         val totalBytes: Long,
         val speedKbps: Double = 0.0
     ) : UploadResult()
+
     data class Success(
-        val taskId: String,
+        override val taskId: String,
+        override val fileName: String = "",
         val remoteUrl: String,
         val fileId: String? = null,
         val bytesUploaded: Long
     ) : UploadResult()
+
     data class Failure(
-        val taskId: String,
+        override val taskId: String,
+        override val fileName: String = "",
         val error: String,
         val isRetryable: Boolean = true
     ) : UploadResult()
-    data class Cancelled(val taskId: String) : UploadResult()
-    data class Paused(val taskId: String, val percent: Int) : UploadResult()
+
+    data class Cancelled(
+        override val taskId: String,
+        override val fileName: String = ""
+    ) : UploadResult()
+
+    data class Paused(
+        override val taskId: String,
+        override val fileName: String = "",
+        val percent: Int
+    ) : UploadResult()
 }

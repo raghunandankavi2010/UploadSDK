@@ -28,6 +28,7 @@ class UploadWorkObserver @Inject constructor(
 
                 UploadResult.Progress(
                     taskId = taskId,
+                    fileName = "", // Filename not available in WorkManager progress, will be filled by combine
                     percent = percent,
                     bytesUploaded = bytes,
                     totalBytes = total,

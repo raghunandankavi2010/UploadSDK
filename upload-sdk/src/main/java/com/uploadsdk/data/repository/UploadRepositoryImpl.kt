@@ -152,35 +152,32 @@ class UploadRepositoryImpl @Inject constructor(
             mapEntityToResult(entity)
         }
         val workFlow = workObserver.observeWorkProgress(taskId)
+            .map<UploadResult.Progress, UploadResult.Progress?> { it }
+            .onStart { emit(null) }
 
-        return workFlow.map { progress ->
-            UploadResult.Progress(
-                taskId = progress.taskId,
-                percent = progress.percent,
-                bytesUploaded = progress.bytesUploaded,
-                totalBytes = progress.totalBytes,
-                speedKbps = progress.speedKbps
-            )
-        }.combine(dbFlow) { workResult, dbResult ->
-            // Prefer work progress for InProgress, use DB for final states
-            if (dbResult is UploadResult.Success || dbResult is UploadResult.Failure || dbResult is UploadResult.Cancelled) {
-                dbResult
-            } else {
-                workResult
+        return dbFlow.combine(workFlow) { dbResult, workResult ->
+            // Prefer work progress only for active uploads, use DB for final or paused states
+            when (dbResult) {
+                is UploadResult.Success,
+                is UploadResult.Failure,
+                is UploadResult.Cancelled,
+                is UploadResult.Paused -> dbResult
+                else -> {
+                    // Enrich work progress with fileName from database
+                    if (workResult != null) {
+                        workResult.copy(fileName = dbResult.fileName)
+                    } else {
+                        dbResult
+                    }
+                }
             }
         }
     }
 
-    override fun observeAllUploads(): Flow<List<UploadResult.Progress>> {
+    override fun observeAllUploads(): Flow<List<UploadResult>> {
         return taskDao.observeAll().map { entities ->
             entities.map { entity ->
-                UploadResult.Progress(
-                    taskId = entity.taskId,
-                    percent = entity.progressPercent,
-                    bytesUploaded = entity.bytesUploaded,
-                    totalBytes = entity.totalBytes,
-                    speedKbps = entity.speedKbps
-                )
+                mapEntityToResult(entity)
             }
         }
     }
@@ -201,36 +198,40 @@ class UploadRepositoryImpl @Inject constructor(
 
     private fun mapEntityToResult(entity: UploadTaskEntity): UploadResult {
         return when (entity.statusType) {
-            "PENDING" -> UploadResult.Enqueued(entity.taskId)
-            "PREPROCESSING" -> UploadResult.Preprocessing(entity.taskId, "processing")
-            "QUEUED" -> UploadResult.Enqueued(entity.taskId)
+            "PENDING" -> UploadResult.Enqueued(entity.taskId, entity.fileName)
+            "PREPROCESSING" -> UploadResult.Preprocessing(entity.taskId, entity.fileName, "processing")
+            "QUEUED" -> UploadResult.Enqueued(entity.taskId, entity.fileName)
             "IN_PROGRESS" -> UploadResult.Progress(
                 taskId = entity.taskId,
+                fileName = entity.fileName,
                 percent = entity.progressPercent,
                 bytesUploaded = entity.bytesUploaded,
                 totalBytes = entity.totalBytes,
                 speedKbps = entity.speedKbps
             )
-            "PAUSED" -> UploadResult.Paused(entity.taskId, entity.progressPercent)
+            "PAUSED" -> UploadResult.Paused(entity.taskId, entity.fileName, entity.progressPercent)
             "VERIFYING" -> UploadResult.Progress(
                 taskId = entity.taskId,
+                fileName = entity.fileName,
                 percent = entity.progressPercent,
                 bytesUploaded = entity.bytesUploaded,
                 totalBytes = entity.totalBytes
             )
             "COMPLETED" -> UploadResult.Success(
                 taskId = entity.taskId,
+                fileName = entity.fileName,
                 remoteUrl = entity.remoteUrl ?: "",
                 fileId = entity.fileId,
                 bytesUploaded = entity.totalBytes
             )
             "FAILED" -> UploadResult.Failure(
                 taskId = entity.taskId,
+                fileName = entity.fileName,
                 error = entity.errorMessage ?: "Unknown error",
                 isRetryable = entity.retryCount < entity.maxRetries
             )
-            "CANCELLED" -> UploadResult.Cancelled(entity.taskId)
-            else -> UploadResult.Enqueued(entity.taskId)
+            "CANCELLED" -> UploadResult.Cancelled(entity.taskId, entity.fileName)
+            else -> UploadResult.Enqueued(entity.taskId, entity.fileName)
         }
     }
 

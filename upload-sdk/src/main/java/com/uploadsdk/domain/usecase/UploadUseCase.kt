@@ -33,7 +33,7 @@ class UploadUseCase @Inject constructor(
         repository.retryUpload(taskId)
     }
 
-    fun observeAll(): Flow<List<UploadResult.Progress>> {
+    fun observeAll(): Flow<List<UploadResult>> {
         return repository.observeAllUploads()
     }
 

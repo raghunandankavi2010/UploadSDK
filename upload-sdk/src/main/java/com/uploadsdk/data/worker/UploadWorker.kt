@@ -19,6 +19,7 @@ import com.uploadsdk.util.UploadLogger
 import com.uploadsdk.util.UploadSpeedCalculator
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -66,6 +67,7 @@ class UploadWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         val taskId = inputData.getString(KEY_TASK_ID) ?: return Result.failure()
+        UploadLogger.d("UploadWorker: Starting work for task $taskId")
         val filePath = inputData.getString(KEY_FILE_PATH) ?: return Result.failure()
         val fileName = inputData.getString(KEY_FILE_NAME) ?: return Result.failure()
         val mimeType = inputData.getString(KEY_MIME_TYPE) ?: "application/octet-stream"
@@ -76,6 +78,7 @@ class UploadWorker @AssistedInject constructor(
 
         val file = File(filePath)
         if (!file.exists()) {
+            UploadLogger.e("UploadWorker: File not found: $filePath")
             taskDao.markFailed(taskId, "File not found: $filePath")
             notificationManager.showErrorNotification(taskId, fileName, "File not found")
             return Result.failure()
@@ -86,9 +89,11 @@ class UploadWorker @AssistedInject constructor(
 
         return withContext(Dispatchers.IO) {
             try {
+                UploadLogger.d("UploadWorker: Updating status to IN_PROGRESS for $taskId")
                 taskDao.updateStatus(taskId, "IN_PROGRESS")
 
                 // Get or create session
+                UploadLogger.d("UploadWorker: Creating/getting session for $taskId")
                 val session = if (isResume) {
                     sessionManager.getSession(taskId) ?: sessionManager.createSession(
                         taskId, fileName, totalBytes, checksum
@@ -96,13 +101,21 @@ class UploadWorker @AssistedInject constructor(
                 } else {
                     sessionManager.createSession(taskId, fileName, totalBytes, checksum)
                 }
+                UploadLogger.d("UploadWorker: Session created: ${session.sessionId}")
 
                 var uploadedChunks = chunkDao.getUploadedCount(taskId)
                 var bytesUploaded = uploadedChunks * (totalBytes / maxOf(totalChunks, 1))
 
                 // Upload remaining chunks
+                UploadLogger.d("UploadWorker: Starting chunk upload loop for $taskId")
                 while (true) {
+                    if (isStopped) {
+                        UploadLogger.d("UploadWorker: Worker stopped for $taskId")
+                        break
+                    }
+
                     val chunk = chunkDao.getNextPendingChunk(taskId) ?: break
+                    UploadLogger.d("UploadWorker: Uploading chunk ${chunk.chunkIndex} for $taskId")
 
                     val chunkStartTime = System.currentTimeMillis()
                     val result = retryCoordinator.executeWithRetry(
@@ -120,6 +133,7 @@ class UploadWorker @AssistedInject constructor(
                     }
 
                     if (result.isFailure) {
+                        UploadLogger.e("UploadWorker: Chunk upload failed for $taskId", result.exceptionOrNull())
                         throw result.exceptionOrNull() ?: Exception("Chunk upload failed")
                     }
 
@@ -151,7 +165,10 @@ class UploadWorker @AssistedInject constructor(
                     )
                 }
 
+                if (isStopped) return@withContext Result.retry()
+
                 // Commit upload
+                UploadLogger.d("UploadWorker: Committing upload for $taskId")
                 taskDao.updateStatus(taskId, "VERIFYING")
                 val commitRequest = CommitUploadRequest(
                     taskId = taskId,
@@ -169,6 +186,7 @@ class UploadWorker @AssistedInject constructor(
                 if (commitResponse.isSuccessful) {
                     val body = commitResponse.body()
                     if (body?.success == true) {
+                        UploadLogger.d("UploadWorker: Upload successful for $taskId")
                         val duration = System.currentTimeMillis() - startTime
                         taskDao.markCompleted(taskId, body.remoteUrl, body.fileId)
                         analytics.trackUploadSuccess(taskId, duration, totalBytes)
@@ -180,13 +198,19 @@ class UploadWorker @AssistedInject constructor(
                             )
                         )
                     } else {
+                        UploadLogger.e("UploadWorker: Commit failed for $taskId: ${body?.message}")
                         throw Exception("Commit failed: ${body?.message}")
                     }
                 } else {
+                    UploadLogger.e("UploadWorker: Commit HTTP error for $taskId: ${commitResponse.code()}")
                     throw Exception("Commit HTTP error: ${commitResponse.code()}")
                 }
 
+            } catch (e: CancellationException) {
+                UploadLogger.d("Upload task $taskId cancelled/paused")
+                Result.retry()
             } catch (e: Exception) {
+                UploadLogger.e("UploadWorker: Error during upload for $taskId", e)
                 val duration = System.currentTimeMillis() - startTime
                 val retryCount = taskDao.getById(taskId)?.retryCount ?: 0
                 analytics.trackUploadFailure(taskId, e.message ?: "Unknown", retryCount)

@@ -36,31 +36,31 @@ class UploadViewModel @Inject constructor(
     init {
         // Observe all uploads from database
         viewModelScope.launch {
-            uploadManager.observeAllUploads().collect { progresses ->
-                val current = _uploads.value.toMutableList()
-                progresses.forEach { progress ->
-                    val index = current.indexOfFirst { it.taskId == progress.taskId }
-                    val uiModel = UploadUiModel(
-                        taskId = progress.taskId,
-                        fileName = current.find { it.taskId == progress.taskId }?.fileName ?: "Unknown",
-                        status = UploadStatus.InProgress(
-                            progressPercent = progress.percent,
-                            bytesUploaded = progress.bytesUploaded,
-                            totalBytes = progress.totalBytes,
-                            currentChunk = 0,
-                            totalChunks = 0,
-                            speedKbps = progress.speedKbps
-                        ),
-                        progress = progress.percent,
-                        bytesUploaded = progress.bytesUploaded,
-                        totalBytes = progress.totalBytes,
-                        speedText = FileSizeFormatter.formatSpeed(progress.speedKbps)
+            uploadManager.observeAllUploads().collect { results ->
+                val current = results.map { result ->
+                    UploadUiModel(
+                        taskId = result.taskId,
+                        fileName = result.fileName,
+                        status = mapResultToStatus(result),
+                        progress = when (result) {
+                            is UploadResult.Progress -> result.percent
+                            is UploadResult.Paused -> result.percent
+                            else -> 0
+                        },
+                        bytesUploaded = when (result) {
+                            is UploadResult.Progress -> result.bytesUploaded
+                            is UploadResult.Success -> result.bytesUploaded
+                            else -> 0
+                        },
+                        totalBytes = when (result) {
+                            is UploadResult.Progress -> result.totalBytes
+                            else -> 0
+                        },
+                        speedText = when (result) {
+                            is UploadResult.Progress -> FileSizeFormatter.formatSpeed(result.speedKbps)
+                            else -> ""
+                        }
                     )
-                    if (index >= 0) {
-                        current[index] = uiModel
-                    } else {
-                        current.add(uiModel)
-                    }
                 }
                 _uploads.value = current.sortedByDescending { it.status is UploadStatus.InProgress }
             }
@@ -92,7 +92,9 @@ class UploadViewModel @Inject constructor(
                     metadata = mapOf("source" to "demo_app", "uri" to uri.toString())
                 )
                 _events.emit(UploadEvent.UploadStarted(taskId))
-                observeTask(taskId)
+                // Note: observeTask is no longer needed as init block handles all updates
+                // But we still want to emit events for this specific task
+                handleSpecificTaskEvents(taskId)
                 _selectedFiles.value = _selectedFiles.value.filter { it != uri }
             } catch (e: Exception) {
                 _events.emit(UploadEvent.Error(e.message ?: "Upload failed"))
@@ -100,73 +102,40 @@ class UploadViewModel @Inject constructor(
         }
     }
 
-    private fun observeTask(taskId: String) {
+    private fun handleSpecificTaskEvents(taskId: String) {
         viewModelScope.launch {
-            // Observe WorkManager for real-time progress
-            workObserver.observeWorkProgress(taskId).collect { progress ->
-                val current = _uploads.value.toMutableList()
-                val index = current.indexOfFirst { it.taskId == taskId }
-                val uiModel = UploadUiModel(
-                    taskId = taskId,
-                    fileName = current.find { it.taskId == taskId }?.fileName ?: "Upload",
-                    status = UploadStatus.InProgress(
-                        progressPercent = progress.percent,
-                        bytesUploaded = progress.bytesUploaded,
-                        totalBytes = progress.totalBytes,
-                        currentChunk = 0,
-                        totalChunks = 0,
-                        speedKbps = progress.speedKbps
-                    ),
-                    progress = progress.percent,
-                    bytesUploaded = progress.bytesUploaded,
-                    totalBytes = progress.totalBytes,
-                    speedText = FileSizeFormatter.formatSpeed(progress.speedKbps)
-                )
-                if (index >= 0) {
-                    current[index] = uiModel
-                } else {
-                    current.add(uiModel)
-                }
-                _uploads.value = current.sortedByDescending { it.status is UploadStatus.InProgress }
-            }
-        }
-
-        viewModelScope.launch {
-            // Observe final states from database
             uploadManager.observeUpload(taskId).collect { result ->
                 when (result) {
-                    is UploadResult.Success -> {
-                        val current = _uploads.value.toMutableList()
-                        val index = current.indexOfFirst { it.taskId == taskId }
-                        if (index >= 0) {
-                            current[index] = current[index].copy(
-                                status = UploadStatus.Completed(result.remoteUrl, result.fileId)
-                            )
-                            _uploads.value = current
-                        }
-                        _events.emit(UploadEvent.UploadComplete(taskId, result.remoteUrl))
-                    }
-                    is UploadResult.Failure -> {
-                        val current = _uploads.value.toMutableList()
-                        val index = current.indexOfFirst { it.taskId == taskId }
-                        if (index >= 0) {
-                            current[index] = current[index].copy(
-                                status = UploadStatus.Failed(result.error, 0, result.isRetryable)
-                            )
-                            _uploads.value = current
-                        }
-                        _events.emit(UploadEvent.UploadFailed(taskId, result.error))
-                    }
+                    is UploadResult.Success -> _events.emit(UploadEvent.UploadComplete(taskId, result.remoteUrl))
+                    is UploadResult.Failure -> _events.emit(UploadEvent.UploadFailed(taskId, result.error))
                     else -> { }
                 }
             }
         }
     }
 
+    private fun mapResultToStatus(result: UploadResult): UploadStatus {
+        return when (result) {
+            is UploadResult.Enqueued -> UploadStatus.Pending
+            is UploadResult.Preprocessing -> UploadStatus.Preprocessing(result.stage)
+            is UploadResult.Progress -> UploadStatus.InProgress(
+                progressPercent = result.percent,
+                bytesUploaded = result.bytesUploaded,
+                totalBytes = result.totalBytes,
+                currentChunk = 0,
+                totalChunks = 0,
+                speedKbps = result.speedKbps
+            )
+            is UploadResult.Paused -> UploadStatus.Paused(result.percent, 0)
+            is UploadResult.Success -> UploadStatus.Completed(result.remoteUrl, result.fileId)
+            is UploadResult.Failure -> UploadStatus.Failed(result.error, 0, result.isRetryable)
+            is UploadResult.Cancelled -> UploadStatus.Cancelled
+        }
+    }
+
     fun pauseUpload(taskId: String) {
         viewModelScope.launch {
             uploadManager.pause(taskId)
-            updateTaskStatus(taskId, UploadStatus.Paused(0, 0))
         }
     }
 
@@ -195,15 +164,6 @@ class UploadViewModel @Inject constructor(
             _uploads.value = _uploads.value.filter {
                 it.status !is UploadStatus.Completed
             }
-        }
-    }
-
-    private fun updateTaskStatus(taskId: String, status: UploadStatus) {
-        val current = _uploads.value.toMutableList()
-        val index = current.indexOfFirst { it.taskId == taskId }
-        if (index >= 0) {
-            current[index] = current[index].copy(status = status)
-            _uploads.value = current
         }
     }
 }

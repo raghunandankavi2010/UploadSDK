@@ -11,7 +11,7 @@ interface UploadRepository {
     suspend fun resumeUpload(taskId: String)
     suspend fun retryUpload(taskId: String)
     fun observeUpload(taskId: String): Flow<UploadResult>
-    fun observeAllUploads(): Flow<List<UploadResult.Progress>>
+    fun observeAllUploads(): Flow<List<UploadResult>>
     suspend fun getPendingUploads(): List<UploadTask>
     suspend fun clearCompletedUploads()
     suspend fun getUploadHistory(): List<UploadTask>

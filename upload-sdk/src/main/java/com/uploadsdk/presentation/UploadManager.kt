@@ -43,7 +43,7 @@ class UploadManager @Inject constructor(
         return uploadUseCase.observeUpload(taskId)
     }
 
-    fun observeAllUploads(): Flow<List<UploadResult.Progress>> {
+    fun observeAllUploads(): Flow<List<UploadResult>> {
         return uploadUseCase.observeAll()
     }
 

@@ -3,6 +3,7 @@ package com.uploadsdk.data.remote.api
 import com.uploadsdk.data.remote.dto.*
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
+import okio.Buffer
 import retrofit2.Response
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -39,8 +40,8 @@ class MockUploadApiService @Inject constructor() : UploadApiService {
         checksum: RequestBody?
     ): Response<ChunkUploadResponse> {
         kotlinx.coroutines.delay(300) // Simulate upload time
-        val taskIdStr = taskId.toString()
-        val index = chunkIndex.toString().toIntOrNull() ?: 0
+        val taskIdStr = taskId.readString()
+        val index = chunkIndex.readString().toIntOrNull() ?: 0
         uploadedChunks.getOrPut(taskIdStr) { mutableSetOf() }.add(index)
         return Response.success(
             ChunkUploadResponse(
@@ -49,6 +50,16 @@ class MockUploadApiService @Inject constructor() : UploadApiService {
                 chunkIndex = index
             )
         )
+    }
+
+    private fun RequestBody.readString(): String {
+        return try {
+            val buffer = Buffer()
+            this.writeTo(buffer)
+            buffer.readUtf8()
+        } catch (e: Exception) {
+            ""
+        }
     }
 
     override suspend fun commitUpload(request: CommitUploadRequest): Response<CommitUploadResponse> {
