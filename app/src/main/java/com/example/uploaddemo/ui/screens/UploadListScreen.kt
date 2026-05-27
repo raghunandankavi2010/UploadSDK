@@ -157,7 +157,7 @@ fun UploadListScreen(
                             onResume = { viewModel.resumeUpload(upload.taskId) },
                             onCancel = { viewModel.cancelUpload(upload.taskId) },
                             onRetry = { viewModel.retryUpload(upload.taskId) },
-                            onCompleted = { viewModel.clearCompleted() },
+                            onCompleted = { viewModel.deleteUpload(upload.taskId) },
                             onClick = { onNavigateToDetail(upload.taskId) }
                         )
                     }
