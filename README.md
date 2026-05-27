@@ -1,4 +1,4 @@
-# Android File Upload SDK v1.0
+# Android File Upload SDK v2.0
 
 Production-ready Android File Upload SDK implementing chunked resumable uploads with Jetpack Compose demo app.
 Based on Rahul Ray's system design principles for mobile upload SDKs.
@@ -6,38 +6,7 @@ Based on Rahul Ray's system design principles for mobile upload SDKs.
 ## System Design Architecture
 
 ```
-+---------------------------------------------------------------+
-|                     UPLOAD SDK LAYER                          |
-+---------+-------------+-------------+------------+------------+
-| SDK API |Preprocessing| Persistent  | Scheduler  | WorkManager|
-|         |             | Queue       |            |            |
-+---------+-------------+-------------+------------+------------+
-| enqueue | SHA-256     | Room DB     | Priority   | Battery-   |
-| pause   | MIME Extract| taskId      | Queue      | aware      |
-| resume  | Thumbnail   | chunks      | Thermal    | Survives   |
-| observe | Eligibility | status      | Throttle   | Reboot     |
-| cancel  | Validation  | sessions    | Parallel   | Notifications
-+---------+-------------+-------------+------------+------------+
-                          |
-                +---------+----------+
-                |   COORDINATOR        |
-                | Session Management   |
-                | Token Refresh        |
-                | Retry Logic          |
-                | Auto-resume on       |
-                | network restore      |
-                +---------+----------+
-                          |
-                +---------+----------+
-                |   CHUNK ENGINE       |
-                | File -> [C1]->[C2]   |
-                | 8MB Chunks           |
-                | Adaptive Sizing      |
-                | Offset Tracking      |
-                | Checksum Verify      |
-                +----------------------+
-
-                ┌─────────────────────────────────────────────────────────────────────────────┐
+┌─────────────────────────────────────────────────────────────────────────────┐
 │                            ANDROID APP LAYER                                │
 │  (UI Components: UploadDetailScreen, UploadListScreen, ViewModel)           │
 └───────────────────────┬─────────────────────────────────────────────────────┘
@@ -45,13 +14,13 @@ Based on Rahul Ray's system design principles for mobile upload SDKs.
                         ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                            SDK PRESENTATION LAYER                           │
-│  (UploadManager.kt: Entry point for the developer using the SDK)            │
+│  (UploadManager / UploadSdk / UploadSdkBuilder)                             │
 └───────────────────────┬─────────────────────────────────────────────────────┘
                         │ 2. invoke(task)
                         ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                            SDK DOMAIN LAYER                                 │
-│  (UploadUseCase.kt: Orchestrates business logic and repository calls)       │
+│  (UploadUseCase: Orchestrates business logic and repository calls)          │
 └───────────────────────┬─────────────────────────────────────────────────────┘
                         │ 3. enqueueUpload(task)
                         ▼
@@ -60,14 +29,16 @@ Based on Rahul Ray's system design principles for mobile upload SDKs.
 │                                                                             │
 │  ┌───────────────────┐      ┌──────────────────┐      ┌──────────────────┐  │
 │  │ FilePreprocessor  │ ◄─── │UploadRepository  │ ───► │   ChunkEngine    │  │
-│  │ (Checksum/Thumb)  │      │      Impl        │      │ (File Splitting) │  │
+│  │ Checksum/Thumb/   │      │      Impl        │      │ File Splitting   │  │
+│  │ Validation        │      │ + Cache Cleanup  │      │ Adaptive Sizing  │  │
 │  └───────────────────┘      └────────┬─────────┘      └──────────────────┘  │
 │                                      │                                      │
 │               4. Save Task/Chunks    │   5. Schedule via WorkManager        │
 │                                      ▼                                      │
 │  ┌───────────────────┐      ┌──────────────────┐      ┌──────────────────┐  │
 │  │   Room Database   │ ◄─── │   UploadWorker   │ ───► │  Notifications   │  │
-│  │ (Task/Chunk DTOs) │      │ (CoroutineWorker)│      │  (Manager/UI)    │  │
+│  │ Task/Chunk/Session│      │ Sequential or    │      │ Foreground Svc   │  │
+│  │                   │      │ Parallel Chunks  │      │ Progress/ETA     │  │
 │  └─────────▲─────────┘      └────────┬─────────┘      └──────────────────┘  │
 │            │                         │                                      │
 │            │ 7. Mark Chunk Done/Fail │ 6. Loop: uploadChunk()               │
@@ -75,14 +46,14 @@ Based on Rahul Ray's system design principles for mobile upload SDKs.
 │                                      ▼                  │                   │
 │  ┌───────────────────┐      ┌──────────────────┐        │                   │
 │  │  SessionManager   │ ◄─── │  ChunkUploader   │ ◄──────┘                   │
-│  │  (Auth/Sessions)  │      │ (Retrofit Calls) │                            │
+│  │ Auth / Expiry     │      │ Retrofit Calls   │                            │
 │  └───────────────────┘      └────────┬─────────┘                            │
 │                                      │                                      │
 └──────────────────────────────────────┼──────────────────────────────────────┘
                                        │ 8. HTTP Requests (Multipart)
                                        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                            TEST SERVER (Flask)                              │
+│                            SERVER (Flask / Your Backend)                    │
 │                                                                             │
 │  ┌───────────────────┐      ┌──────────────────┐      ┌──────────────────┐  │
 │  │  /upload/init     │ ───► │  /upload/chunk   │ ───► │  /upload/commit  │  │
@@ -94,52 +65,79 @@ Based on Rahul Ray's system design principles for mobile upload SDKs.
 ## Features
 
 ### Core Upload Features
-- **Chunked Uploads**: Files split into 8MB chunks (adaptive sizing for files < 10MB)
+- **Chunked Uploads**: Files split into configurable chunks (default 8MB, adaptive sizing for files < 10MB)
 - **Resumable**: Resume from last uploaded chunk after app kill, network loss, or crash
-- **Persistent Queue**: Room database persists upload state across reboots
+- **Parallel Chunk Uploads**: Configurable parallelism with `Semaphore`-based concurrency control
+- **Persistent Queue**: Room database persists upload state (tasks, chunks, sessions) across reboots
 - **Background Processing**: WorkManager handles uploads even when app is closed
-- **Notifications**: Progress notifications during background uploads
+- **Foreground Notifications**: Progress notification shown during active uploads with Android 12+ safety handling
+- **ETA Calculation**: Real-time estimated time remaining based on rolling speed average
 
 ### Preprocessing
-- **SHA-256 Checksum**: Integrity verification for each chunk and full file
-- **MIME Extraction**: Automatic MIME type detection from file extension
+- **SHA-256 Checksum**: Integrity verification for full file (delegated to `ChecksumCalculator`)
+- **MIME Extraction**: Automatic MIME type detection from file extension via `MimeTypeMap`
 - **Thumbnail Generation**: Image/video thumbnail extraction for UI preview
-- **Eligibility Checks**: File size limits, extension validation, empty file detection
+- **File Validation**: File size limits (2GB), allowed extensions, empty file detection via `UploadFileValidator`
 
 ### Scheduling & Resource Management
-- **Priority Queue**: LOW, NORMAL, HIGH, CRITICAL priorities
-- **Battery Awareness**: Defers uploads when battery < 15% and not charging
-- **Thermal Throttling**: Reduces parallelism when device is thermally stressed
-- **Concurrent Limits**: Max 3 parallel uploads with queue management
-- **Network Monitoring**: Auto-resumes uploads when connectivity restores
+- **Priority Queue**: `LOW`, `NORMAL`, `HIGH`, `CRITICAL` priorities with backoff policy per priority
+- **Battery Awareness**: Defers non-critical uploads when battery < 15% and not charging
+- **Thermal Throttling**: Real thermal monitoring via `PowerManager.currentThermalStatus` (API 29+), reduces parallelism under thermal stress
+- **Network Type Enforcement**: Respects `UploadConfig.networkType` — supports `ANY`, `WIFI_ONLY`, and `UNMETERED_ONLY` mapped to WorkManager constraints
+- **Concurrent Limits**: Configurable max parallel uploads with `UploadQueueManager`
+- **Network Monitoring**: Auto-resumes uploads when connectivity restores via `NetworkChangeReceiver`
 
 ### Reliability
-- **Retry Logic**: Exponential backoff with configurable max retries
-- **Session Management**: Backend session creation with refresh support
-- **Progress Tracking**: Real-time progress, speed calculation (KB/s, MB/s)
-- **Error Handling**: Structured exceptions for different failure modes
-- **Analytics Interface**: Pluggable analytics for upload metrics
+- **Retry Logic**: Exponential backoff (linear for CRITICAL) with configurable max retries
+- **Session Management**: Backend session creation with expiry checks and auto-refresh
+- **Progress Tracking**: Real-time progress, speed calculation (KB/s, MB/s), ETA
+- **Error Handling**: Structured exceptions (`FileNotFoundException`, `InvalidFileException`) with retry classification
+- **Analytics Interface**: Pluggable analytics for upload metrics (`UploadAnalytics`)
+- **Cache Cleanup**: Automatic cleanup of cached file copies and thumbnails on upload delete/clear
+
+### Configuration
+```kotlin
+data class UploadConfig(
+    val baseUrl: String,
+    val chunkSize: Int = 8 * 1024 * 1024,       // 8MB default
+    val maxRetries: Int = 3,
+    val parallelUploads: Int = 3,                 // Parallel chunk count
+    val enableCompression: Boolean = false,
+    val enableThumbnail: Boolean = true,
+    val batteryAware: Boolean = true,
+    val thermalThrottling: Boolean = true,
+    val networkType: NetworkType = NetworkType.ANY, // ANY, WIFI_ONLY, UNMETERED_ONLY
+    val timeoutMs: Long = 30000L,
+    val useMockApi: Boolean = false,
+    val authTokenProvider: (() -> String)? = null   // Dynamic auth token
+)
+```
 
 ### UI (Jetpack Compose Demo)
-- **Material3 Design**: Modern UI with dynamic colors
-- **Upload List**: Real-time progress with speed, pause/resume/cancel/retry
-- **Detail Screen**: Chunk-level progress inspection
-- **File Picker**: Multi-select with priority selection
+- **Material3 Design**: Modern UI with status-colored indicators
+- **Upload List**: Real-time progress with speed, ETA, pause/resume/cancel/retry
+- **Detail Screen**: Chunk-level progress inspection (individual chunk states)
+- **File Picker**: Multi-select with per-file priority selection dropdown
 - **Settings**: SDK configuration screen
+- **Thumbnails**: Image/video previews via Coil
 - **Navigation**: NavHost with list -> detail flow
 
 ## Quick Start
-### Local server
-1. cd local-server
-2. pip3 install -r requirements.txt
-3. pip3 install flask werkzeug
+
+### Local Server Setup
+```bash
+cd local-server
+pip3 install flask werkzeug
+python3 upload_server.py
+```
+Server starts on `http://0.0.0.0:5000`
 
 ### 1. Add dependency
 ```kotlin
 implementation(project(":upload-sdk"))
 ```
 
-### 2. Initialize Application
+### 2. Initialize Application (Hilt)
 ```kotlin
 @HiltAndroidApp
 class MyApp : Application(), Configuration.Provider {
@@ -150,7 +148,25 @@ class MyApp : Application(), Configuration.Provider {
 }
 ```
 
-### 3. Upload a file
+### 3. Provide UploadConfig (Hilt module)
+```kotlin
+@Module
+@InstallIn(SingletonComponent::class)
+object AppModule {
+    @Provides
+    @Singleton
+    fun provideUploadConfig(): UploadConfig = UploadConfig(
+        baseUrl = "http://10.0.2.2:5000/api/v1/",
+        parallelUploads = 3,
+        networkType = UploadConfig.NetworkType.ANY,
+        batteryAware = true,
+        thermalThrottling = true,
+        authTokenProvider = { "Bearer my-token" }
+    )
+}
+```
+
+### 4. Upload a file
 ```kotlin
 @HiltViewModel
 class MyViewModel @Inject constructor(
@@ -166,145 +182,157 @@ class MyViewModel @Inject constructor(
             )
         }
     }
+
+    // Observe real-time progress with speed and ETA
+    fun observeUpload(taskId: String) {
+        viewModelScope.launch {
+            uploadManager.observeUpload(taskId).collect { result ->
+                when (result) {
+                    is UploadResult.Progress -> {
+                        // result.percent, result.speedKbps, result.etaSeconds
+                    }
+                    is UploadResult.Success -> {
+                        // result.remoteUrl, result.fileId
+                    }
+                    is UploadResult.Failure -> {
+                        // result.error, result.isRetryable
+                    }
+                    else -> {}
+                }
+            }
+        }
+    }
 }
 ```
 
-### 4. Control uploads
+### 5. Control uploads
 ```kotlin
 uploadManager.pause(taskId)
 uploadManager.resume(taskId)
 uploadManager.cancel(taskId)
 uploadManager.retry(taskId)
+uploadManager.clearCompleted()         // Also cleans up cached files + thumbnails
+uploadManager.getChunkProgress(taskId) // Per-chunk upload state
 ```
 
-### 5. Non-Hilt usage
+### 6. Non-Hilt usage (Builder pattern)
 ```kotlin
 val uploadSdk = UploadSdkBuilder(context)
-    .baseUrl("https://api.example.com")
+    .baseUrl("https://api.example.com/v1/")
     .chunkSize(8 * 1024 * 1024)
     .maxRetries(5)
+    .parallelUploads(3)
+    .networkType(UploadConfig.NetworkType.WIFI_ONLY)
+    .authTokenProvider { "Bearer ${getToken()}" }
     .build()
 
 val taskId = uploadSdk.uploadFile(file, priority = UploadPriority.HIGH)
+uploadSdk.observeUpload(taskId).collect { result -> ... }
 ```
+
+## Upload Flow
+
+```
+1. Client calls uploadManager.uploadFile(file)
+2. FilePreprocessor validates file, extracts MIME, generates checksum + thumbnail
+3. ChunkEngine splits file into chunks (adaptive sizing)
+4. Room DB persists task + chunk entities
+5. UploadScheduler creates WorkManager request with:
+   - Network constraint (CONNECTED or UNMETERED based on config)
+   - Battery constraint (if battery-aware enabled)
+   - Thermal check (defers if throttled)
+   - Priority-based backoff policy
+6. UploadWorker starts:
+   a. Shows foreground notification
+   b. Creates/resumes server session via SessionManager
+   c. Uploads chunks (sequential or parallel based on config)
+   d. Reports progress + speed + ETA on each chunk completion
+   e. Commits upload on server
+   f. Cleans up on success
+7. UploadWorkObserver propagates real-time progress to UI via Flow
+```
+
+## UploadResult States
+
+| State | Description | UI Actions |
+|-------|-------------|------------|
+| `Enqueued` | Task created, waiting to start | - |
+| `Preprocessing` | Validating, checksumming, generating thumbnail | - |
+| `Progress` | Actively uploading (percent, speed, ETA) | Pause |
+| `Paused` | Upload paused by user | Resume |
+| `Success` | Upload complete with remote URL | Remove |
+| `Failure` | Upload failed with error and retry count | Retry, Remove |
+| `Cancelled` | Upload cancelled by user | Retry, Remove |
 
 ## Project Structure
 
 ```
 upload-sdk/
-├── config/              # SDK Configuration
+├── config/              # UploadConfig (baseUrl, chunkSize, networkType, etc.)
 ├── domain/
-│   ├── model/           # UploadTask, UploadStatus, UploadResult, ChunkInfo
-│   ├── repository/      # Repository interfaces
+│   ├── model/           # UploadTask, UploadResult, ChunkInfo, UploadPriority
+│   ├── repository/      # UploadRepository, ChunkRepository, SessionRepository
 │   └── usecase/         # UploadUseCase
 ├── data/
-│   ├── local/           # Room DB, DAOs, Entities
-│   ├── remote/          # Retrofit API, DTOs, Mock API
-│   ├── preprocessor/    # SHA-256, MIME, Thumbnail, Validation
-│   ├── chunk/           # Chunk splitting, chunk upload
-│   ├── scheduler/       # Battery-aware, thermal throttling, priority queue
-│   ├── coordinator/     # Session manager, retry coordinator
-│   ├── repository/      # Repository implementations
-│   └── worker/          # UploadWorker, Notifications, WorkObserver
-├── di/                  # Hilt modules
-├── presentation/        # Public API (UploadManager, UploadSdk, Builder)
-└── util/                # Logging, Formatting, Exceptions, Speed Calc, Analytics
+│   ├── local/           # Room DB, DAOs, Entities (tasks, chunks, sessions)
+│   ├── remote/          # Retrofit API, DTOs, Mock API, AuthInterceptor
+│   ├── preprocessor/    # ChecksumCalculator, ThumbnailGenerator, FileValidator
+│   ├── chunk/           # ChunkEngine (splitting), ChunkUploader (HTTP upload)
+│   ├── scheduler/       # UploadScheduler, BatteryConstraint, ThermalMonitor,
+│   │                    # UploadQueueManager, NetworkChangeReceiver
+│   ├── coordinator/     # SessionManager (expiry), RetryCoordinator (backoff)
+│   ├── repository/      # UploadRepositoryImpl (cache cleanup, cascade delete)
+│   └── worker/          # UploadWorker (sequential + parallel), WorkObserver
+├── di/                  # Hilt modules (Database, Network, Worker, Mock)
+├── presentation/        # UploadManager, UploadSdk, UploadSdkBuilder
+└── util/                # Logger, FileSizeFormatter (speed + ETA), SpeedCalculator,
+                         # FileUtils, Exceptions, Analytics, Benchmark
 
 app/
 ├── ui/
 │   ├── screens/         # UploadListScreen, UploadDetailScreen, SettingsScreen
-│   ├── components/      # UploadItem, UploadThumbnail, FilePickerButton
+│   ├── components/      # UploadItem (progress + ETA), UploadThumbnail
 │   └── theme/           # Material3 theme
 ├── viewmodel/           # UploadViewModel, UploadDetailViewModel
-└── MainActivity.kt      # NavHost
+└── MainActivity.kt      # NavHost, permission handling
 ```
 
 ## Backend API Contract
 
 Your backend needs these endpoints:
 
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/upload/init` | POST | Create upload session |
+| `/api/v1/upload/chunk` | POST | Upload chunk (multipart) |
+| `/api/v1/upload/commit` | POST | Finalize and reassemble |
+| `/api/v1/upload/status/{id}` | GET | Check upload status |
+| `/api/v1/upload/session/refresh` | POST | Refresh expired session |
+
+### Local Test Server (Python)
+```bash
+cd local-server
+pip install flask werkzeug
+python server.py
 ```
-Install python server 
-a. pip install flask werkzeug
 
-b. put the below code in server.py files and run   
-  python server.py
+For emulator use `http://10.0.2.2:5000/api/v1/` as base URL.
+For physical device use your machine's local IP.
 
+See `local-server/README.md` for detailed setup including cleartext traffic config.
 
-Here is the python code    
+## Permissions
 
-import os
-from flask import Flask, request, jsonify
-from werkzeug.utils import secure_filename
-import uuid
-
-app = Flask(__name__)
-UPLOAD_FOLDER = 'uploads'
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-
-# Storage for active chunks
-chunks = {} # taskId -> list of chunk file paths
-
-@app.route('/api/v1/upload/init', methods=['POST'])
-def init_upload():
-    data = request.json
-    task_id = str(uuid.uuid4())
-    session_id = str(uuid.uuid4())
-    total_chunks = data.get('totalChunks', 0)
-    chunks[task_id] = [None] * total_chunks
-    
-    return jsonify({
-        'success': True,
-        'sessionId': session_id,
-        'uploadUrl': f'http://10.0.2.2:5000/api/v1/upload/chunk',
-        'expiresAt': 9999999999
-    })
-
-@app.route('/api/v1/upload/chunk', methods=['POST'])
-def upload_chunk():
-    task_id = request.form.get('task_id')
-    chunk_index = int(request.form.get('chunk_index'))
-    
-    # --- SIMULATE FAILURE FOR TESTING ---
-    # Uncomment the lines below to test how the SDK captures error messages:
-    # if chunk_index == 1: # Fail the second chunk
-    #     return jsonify({'success': False, 'message': 'Storage quota exceeded for chunk 1'}), 507
-    
-    file = request.files['file']
-    filename = secure_filename(f"{task_id}_{chunk_index}.tmp")
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
-    file.save(filepath)
-    
-    if task_id not in chunks: chunks[task_id] = []
-    chunks[task_id][chunk_index] = filepath
-    
-    return jsonify({'success': True, 'eTag': f"etag_{chunk_index}", 'chunkIndex': chunk_index})
-
-@app.route('/api/v1/upload/commit', methods=['POST'])
-def commit_upload():
-    data = request.json
-    task_id = data.get('taskId')
-    file_name = secure_filename(data.get('fileName', 'output.dat'))
-    final_path = os.path.join(UPLOAD_FOLDER, file_name)
-    
-    with open(final_path, 'wb') as outfile:
-        for path in chunks[task_id]:
-            with open(path, 'rb') as infile:
-                outfile.write(infile.read())
-            os.remove(path) # Clean up
-            
-    return jsonify({'success': True, 'remoteUrl': f'http://10.0.2.2:5000/uploads/{file_name}'})
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
-
-POST /api/v1/upload/init        -> Create upload session
-POST /api/v1/upload/chunk       -> Upload chunk (multipart)
-POST /api/v1/upload/commit      -> Finalize upload
-GET  /api/v1/upload/status/{id} -> Check status
-POST /api/v1/upload/session/refresh -> Refresh session
+```xml
+<!-- SDK Manifest (auto-merged) -->
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 ```
+
+The app should request `POST_NOTIFICATIONS` at runtime on Android 13+ for completion/error notifications. Foreground service (progress) notifications are shown without this permission.
 
 ## Testing
 
@@ -314,25 +342,24 @@ POST /api/v1/upload/session/refresh -> Refresh session
 ```
 
 ### Mock API (No backend needed)
-The SDK includes MockUploadApiService for testing without a real backend.
+Set `useMockApi = true` in `UploadConfig` to use the built-in `MockUploadApiService`.
 
 ## Tech Stack
 
-| Component | Technology | Version |
-|-----------|------------|---------|
-| Language | Kotlin | 2.3.21 |
-| Build Tool | Gradle (Kotlin DSL) | 8.x |
-| UI Framework | Jetpack Compose (BOM) | 2024.02.00 |
-| Design System | Material Design 3 | Latest |
-| Architecture | MVVM + Clean Architecture | - |
-| Dependency Injection | Hilt | 2.59.2 |
-| Background Task | WorkManager (Ktx) | 2.9.0 |
-| Database | Room | 2.8.4 |
-| Networking | Retrofit + OkHttp | 2.9.0 / 4.12.0 |
-| Concurrency | Coroutines + Flow | 1.7.3 |
-| Image Loading | Coil | 2.5.0 |
-| JSON Parsing | Gson | 2.10.1 |
-| Analysis | KSP | 2.3.7 |
+| Component | Technology |
+|-----------|------------|
+| Language | Kotlin |
+| Build Tool | Gradle (Kotlin DSL) |
+| UI Framework | Jetpack Compose (BOM) |
+| Design System | Material Design 3 |
+| Architecture | MVVM + Clean Architecture |
+| Dependency Injection | Hilt |
+| Background Task | WorkManager (CoroutineWorker) |
+| Database | Room (export schema enabled) |
+| Networking | Retrofit + OkHttp |
+| Concurrency | Coroutines + Flow + Semaphore |
+| Image Loading | Coil |
+| JSON Parsing | Gson |
 
 ## License
 
