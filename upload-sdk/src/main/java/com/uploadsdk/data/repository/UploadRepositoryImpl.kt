@@ -45,30 +45,35 @@ class UploadRepositoryImpl @Inject constructor(
             throw IllegalArgumentException("File does not exist: ${file.absolutePath}")
         }
 
-        // 1. PREPROCESSING
-        val preprocessResult = preprocessor.preprocess(task)
-        if (!preprocessResult.isEligible) {
-            throw IllegalArgumentException(preprocessResult.rejectionReason ?: "File not eligible")
-        }
-
-        // 2. Save to persistent queue
+        // 1. Save to DB immediately so UI shows the task right away
         val entity = UploadTaskEntity(
             taskId = taskId,
             filePath = file.absolutePath,
             fileName = task.fileName,
-            mimeType = preprocessResult.mimeType,
+            mimeType = task.mimeType,
             totalBytes = file.length(),
             chunkSize = task.chunkSize,
             priority = task.priority.name,
-            statusType = "PENDING",
-            checksum = preprocessResult.checksum,
-            thumbnailPath = preprocessResult.thumbnailPath,
-            metadataJson = gson.toJson(preprocessResult.metadata),
+            statusType = "PREPROCESSING",
             maxRetries = task.maxRetries
         )
         taskDao.insert(entity)
 
-        // 3. Split into chunks
+        // 2. PREPROCESSING (checksum, thumbnail, validation — can take time for large files)
+        val preprocessResult = preprocessor.preprocess(task)
+        if (!preprocessResult.isEligible) {
+            taskDao.markFailed(taskId, preprocessResult.rejectionReason ?: "File not eligible")
+            throw IllegalArgumentException(preprocessResult.rejectionReason ?: "File not eligible")
+        }
+
+        // 3. Update task with preprocessing results
+        taskDao.updateChecksum(taskId, preprocessResult.checksum)
+        if (preprocessResult.thumbnailPath != null) {
+            taskDao.updateThumbnail(taskId, preprocessResult.thumbnailPath)
+        }
+        taskDao.updateStatus(taskId, "PENDING")
+
+        // 4. Split into chunks
         val chunks = chunkEngine.splitFileIntoChunks(file, task.chunkSize)
         val chunkEntities = chunks.map { chunk ->
             ChunkEntity(
@@ -82,10 +87,10 @@ class UploadRepositoryImpl @Inject constructor(
         }
         chunkDao.insertAll(chunkEntities)
 
-        // 4. Update task with total chunks
+        // 5. Update task with total chunks
         taskDao.updateProgress(taskId, 0, 0, 0, chunks.size)
 
-        // 5. Schedule via WorkManager
+        // 6. Schedule via WorkManager
         val inputData = workDataOf(
             UploadWorker.KEY_TASK_ID to taskId,
             UploadWorker.KEY_FILE_PATH to file.absolutePath,
@@ -99,6 +104,7 @@ class UploadRepositoryImpl @Inject constructor(
         )
 
         scheduler.scheduleUpload(taskId, task.priority, inputData)
+        taskDao.updateStatus(taskId, "QUEUED")
         return taskId
     }
 
