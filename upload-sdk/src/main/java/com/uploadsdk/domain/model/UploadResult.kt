@@ -36,6 +36,7 @@ sealed class UploadResult {
         override val taskId: String,
         override val fileName: String = "",
         val error: String,
+        val retryCount: Int = 0,
         val isRetryable: Boolean = true
     ) : UploadResult()
 

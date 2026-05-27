@@ -104,6 +104,11 @@ class UploadRepositoryImpl @Inject constructor(
         taskDao.updateStatus(taskId, "CANCELLED")
     }
 
+    override suspend fun deleteUpload(taskId: String) {
+        scheduler.cancelUpload(taskId)
+        taskDao.deleteById(taskId)
+    }
+
     override suspend fun pauseUpload(taskId: String) {
         scheduler.cancelUpload(taskId)
         taskDao.updateStatus(taskId, "PAUSED")
@@ -228,6 +233,7 @@ class UploadRepositoryImpl @Inject constructor(
                 taskId = entity.taskId,
                 fileName = entity.fileName,
                 error = entity.errorMessage ?: "Unknown error",
+                retryCount = entity.retryCount,
                 isRetryable = entity.retryCount < entity.maxRetries
             )
             "CANCELLED" -> UploadResult.Cancelled(entity.taskId, entity.fileName)

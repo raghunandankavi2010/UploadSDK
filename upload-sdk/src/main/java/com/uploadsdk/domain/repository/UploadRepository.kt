@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 interface UploadRepository {
     suspend fun enqueueUpload(task: UploadTask): String
     suspend fun cancelUpload(taskId: String)
+    suspend fun deleteUpload(taskId: String)
     suspend fun pauseUpload(taskId: String)
     suspend fun resumeUpload(taskId: String)
     suspend fun retryUpload(taskId: String)

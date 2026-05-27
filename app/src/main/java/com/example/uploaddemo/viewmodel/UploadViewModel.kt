@@ -128,7 +128,7 @@ class UploadViewModel @Inject constructor(
             )
             is UploadResult.Paused -> UploadStatus.Paused(result.percent, 0)
             is UploadResult.Success -> UploadStatus.Completed(result.remoteUrl, result.fileId)
-            is UploadResult.Failure -> UploadStatus.Failed(result.error, 0, result.isRetryable)
+            is UploadResult.Failure -> UploadStatus.Failed(result.error, result.retryCount, result.isRetryable)
             is UploadResult.Cancelled -> UploadStatus.Cancelled
         }
     }
@@ -147,7 +147,14 @@ class UploadViewModel @Inject constructor(
 
     fun cancelUpload(taskId: String) {
         viewModelScope.launch {
-            uploadManager.cancel(taskId)
+            uploadManager.delete(taskId)
+            _uploads.value = _uploads.value.filter { it.taskId != taskId }
+        }
+    }
+
+    fun deleteUpload(taskId: String) {
+        viewModelScope.launch {
+            uploadManager.delete(taskId)
             _uploads.value = _uploads.value.filter { it.taskId != taskId }
         }
     }

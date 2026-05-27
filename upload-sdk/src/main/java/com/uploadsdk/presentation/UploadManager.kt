@@ -51,6 +51,10 @@ class UploadManager @Inject constructor(
         uploadUseCase.cancel(taskId)
     }
 
+    suspend fun delete(taskId: String) {
+        uploadUseCase.delete(taskId)
+    }
+
     suspend fun pause(taskId: String) {
         uploadUseCase.pause(taskId)
     }

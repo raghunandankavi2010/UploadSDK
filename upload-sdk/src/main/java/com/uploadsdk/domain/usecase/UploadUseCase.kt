@@ -21,6 +21,10 @@ class UploadUseCase @Inject constructor(
         repository.cancelUpload(taskId)
     }
 
+    suspend fun delete(taskId: String) {
+        repository.deleteUpload(taskId)
+    }
+
     suspend fun pause(taskId: String) {
         repository.pauseUpload(taskId)
     }

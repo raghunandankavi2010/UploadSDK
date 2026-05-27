@@ -47,9 +47,9 @@ fun UploadItem(
         is UploadStatus.Completed -> "Completed"
         is UploadStatus.Failed -> {
             val failed = upload.status as UploadStatus.Failed
-            "Failed${if (failed.retryCount > 0) " (Retry ${failed.retryCount})" else ""}"
+            "Error - Tap to Retry${if (failed.retryCount > 0) " (${failed.retryCount})" else ""}"
         }
-        is UploadStatus.Cancelled -> "Cancelled"
+        is UploadStatus.Cancelled -> "Cancelled - Tap to Retry"
     }
 
     Card(
@@ -189,24 +189,23 @@ fun UploadActions(
                 IconButton(onClick = onPause, modifier = Modifier.size(32.dp)) {
                     Icon(Icons.Default.Pause, contentDescription = "Pause", tint = UploadOrange)
                 }
-                IconButton(onClick = onCancel, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Cancel", tint = UploadRed)
-                }
             }
             is UploadStatus.Paused -> {
                 IconButton(onClick = onResume, modifier = Modifier.size(32.dp)) {
                     Icon(Icons.Default.PlayArrow, contentDescription = "Resume", tint = UploadGreen)
                 }
-                IconButton(onClick = onCancel, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Cancel", tint = UploadRed)
-                }
             }
             is UploadStatus.Failed -> {
-                val isRetryable = (status as UploadStatus.Failed).isRetryable
-                if (isRetryable) {
-                    IconButton(onClick = onRetry, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Retry", tint = UploadBlue)
-                    }
+                IconButton(onClick = onRetry, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Retry", tint = UploadBlue)
+                }
+                IconButton(onClick = onCancel, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.Delete, contentDescription = "Remove", tint = UploadGray)
+                }
+            }
+            is UploadStatus.Cancelled -> {
+                IconButton(onClick = onRetry, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Retry", tint = UploadBlue)
                 }
                 IconButton(onClick = onCancel, modifier = Modifier.size(32.dp)) {
                     Icon(Icons.Default.Delete, contentDescription = "Remove", tint = UploadGray)
@@ -218,9 +217,7 @@ fun UploadActions(
                 }
             }
             else -> {
-                IconButton(onClick = onCancel, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Cancel", tint = UploadRed)
-                }
+                // No action button for other states
             }
         }
     }

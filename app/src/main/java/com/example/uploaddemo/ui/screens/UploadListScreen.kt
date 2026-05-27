@@ -116,7 +116,8 @@ fun UploadListScreen(
                 EmptyUploadState()
             } else {
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
                     items(uploads, key = { it.taskId }) { upload ->
                         UploadItem(
