@@ -1,32 +1,33 @@
 package com.uploadsdk.data.worker
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.ServiceInfo
+import android.os.Build
+import androidx.core.app.NotificationCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
+import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.uploadsdk.data.chunk.ChunkUploader
 import com.uploadsdk.data.coordinator.RetryCoordinator
 import com.uploadsdk.data.coordinator.SessionManager
 import com.uploadsdk.data.local.UploadDatabase
-import com.uploadsdk.data.local.dao.ChunkDao
-import com.uploadsdk.data.local.dao.UploadTaskDao
 import com.uploadsdk.data.remote.api.UploadApiService
 import com.uploadsdk.data.remote.dto.CommitUploadRequest
 import com.uploadsdk.domain.model.SessionInfo
 import com.uploadsdk.util.UploadAnalytics
-import com.uploadsdk.util.UploadLogger
 import com.uploadsdk.util.UploadSpeedCalculator
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
-import kotlin.math.min
+import kotlin.math.max
 import kotlin.system.measureTimeMillis
 
 @HiltWorker
@@ -37,7 +38,6 @@ class UploadWorker @AssistedInject constructor(
     private val chunkUploader: ChunkUploader,
     private val sessionManager: SessionManager,
     private val retryCoordinator: RetryCoordinator,
-    private val notificationManager: UploadNotificationManager,
     private val analytics: UploadAnalytics,
     private val database: UploadDatabase
 ) : CoroutineWorker(context, params) {
@@ -59,15 +59,19 @@ class UploadWorker @AssistedInject constructor(
         const val CURRENT_CHUNK = "current_chunk"
         const val TOTAL_CHUNKS = "total_chunks"
         const val SPEED_KBPS = "speed_kbps"
+
+        const val NOTIFICATION_CHANNEL_ID = "upload_sdk_channel"
+        const val NOTIFICATION_CHANNEL_NAME = "File Uploads"
+        const val NOTIFICATION_ID_BASE = 1000
     }
 
     private val taskDao = database.uploadTaskDao()
     private val chunkDao = database.chunkDao()
     private val speedCalculator = UploadSpeedCalculator()
+    private val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
     override suspend fun doWork(): Result {
         val taskId = inputData.getString(KEY_TASK_ID) ?: return Result.failure()
-        UploadLogger.d("UploadWorker: Starting work for task $taskId")
         val filePath = inputData.getString(KEY_FILE_PATH) ?: return Result.failure()
         val fileName = inputData.getString(KEY_FILE_NAME) ?: return Result.failure()
         val mimeType = inputData.getString(KEY_MIME_TYPE) ?: "application/octet-stream"
@@ -78,22 +82,20 @@ class UploadWorker @AssistedInject constructor(
 
         val file = File(filePath)
         if (!file.exists()) {
-            UploadLogger.e("UploadWorker: File not found: $filePath")
             taskDao.markFailed(taskId, "File not found: $filePath")
-            notificationManager.showErrorNotification(taskId, fileName, "File not found")
             return Result.failure()
         }
+
+        // Show notification immediately at 0%
+        setForeground(createForegroundInfo(taskId, fileName, 0, 0, totalBytes))
 
         val startTime = System.currentTimeMillis()
         analytics.trackUploadStart(taskId, totalBytes, mimeType)
 
         return withContext(Dispatchers.IO) {
             try {
-                UploadLogger.d("UploadWorker: Updating status to IN_PROGRESS for $taskId")
                 taskDao.updateStatus(taskId, "IN_PROGRESS")
 
-                // Get or create session
-                UploadLogger.d("UploadWorker: Creating/getting session for $taskId")
                 val session = if (isResume) {
                     sessionManager.getSession(taskId) ?: sessionManager.createSession(
                         taskId, fileName, totalBytes, totalChunks, checksum
@@ -101,21 +103,12 @@ class UploadWorker @AssistedInject constructor(
                 } else {
                     sessionManager.createSession(taskId, fileName, totalBytes, totalChunks, checksum)
                 }
-                UploadLogger.d("UploadWorker: Session created: ${session.sessionId}")
 
                 var uploadedChunks = chunkDao.getUploadedCount(taskId)
-                var bytesUploaded = uploadedChunks * (totalBytes / maxOf(totalChunks, 1))
+                var bytesUploaded = uploadedChunks * (totalBytes / max(totalChunks, 1))
 
-                // Upload remaining chunks
-                UploadLogger.d("UploadWorker: Starting chunk upload loop for $taskId")
                 while (true) {
-                    if (isStopped) {
-                        UploadLogger.d("UploadWorker: Worker stopped for $taskId")
-                        break
-                    }
-
                     val chunk = chunkDao.getNextPendingChunk(taskId) ?: break
-                    UploadLogger.d("UploadWorker: Uploading chunk ${chunk.chunkIndex} for $taskId")
 
                     val chunkStartTime = System.currentTimeMillis()
                     val result = retryCoordinator.executeWithRetry(
@@ -133,7 +126,6 @@ class UploadWorker @AssistedInject constructor(
                     }
 
                     if (result.isFailure) {
-                        UploadLogger.e("UploadWorker: Chunk upload failed for $taskId", result.exceptionOrNull())
                         throw result.exceptionOrNull() ?: Exception("Chunk upload failed")
                     }
 
@@ -160,15 +152,10 @@ class UploadWorker @AssistedInject constructor(
                         )
                     )
 
-                    notificationManager.showProgressNotification(
-                        taskId, fileName, progress, bytesUploaded, totalBytes
-                    )
+                    // UPDATE NOTIFICATION AFTER EACH CHUNK
+                    setForeground(createForegroundInfo(taskId, fileName, progress, bytesUploaded, totalBytes))
                 }
 
-                if (isStopped) return@withContext Result.retry()
-
-                // Commit upload
-                UploadLogger.d("UploadWorker: Committing upload for $taskId")
                 taskDao.updateStatus(taskId, "VERIFYING")
                 val commitRequest = CommitUploadRequest(
                     taskId = taskId,
@@ -186,11 +173,13 @@ class UploadWorker @AssistedInject constructor(
                 if (commitResponse.isSuccessful) {
                     val body = commitResponse.body()
                     if (body?.success == true) {
-                        UploadLogger.d("UploadWorker: Upload successful for $taskId")
                         val duration = System.currentTimeMillis() - startTime
                         taskDao.markCompleted(taskId, body.remoteUrl, body.fileId)
                         analytics.trackUploadSuccess(taskId, duration, totalBytes)
-                        notificationManager.showCompleteNotification(taskId, fileName)
+
+                        // Show completion notification
+                        showCompleteNotification(taskId, fileName)
+
                         Result.success(
                             workDataOf(
                                 "remote_url" to body.remoteUrl,
@@ -198,23 +187,17 @@ class UploadWorker @AssistedInject constructor(
                             )
                         )
                     } else {
-                        UploadLogger.e("UploadWorker: Commit failed for $taskId: ${body?.message}")
                         throw Exception("Commit failed: ${body?.message}")
                     }
                 } else {
-                    UploadLogger.e("UploadWorker: Commit HTTP error for $taskId: ${commitResponse.code()}")
                     throw Exception("Commit HTTP error: ${commitResponse.code()}")
                 }
 
-            } catch (e: CancellationException) {
-                UploadLogger.d("Upload task $taskId cancelled/paused")
-                Result.retry()
             } catch (e: Exception) {
-                UploadLogger.e("UploadWorker: Error during upload for $taskId", e)
                 val duration = System.currentTimeMillis() - startTime
                 val retryCount = taskDao.getById(taskId)?.retryCount ?: 0
                 analytics.trackUploadFailure(taskId, e.message ?: "Unknown", retryCount)
-                notificationManager.showErrorNotification(taskId, fileName, e.message ?: "Error")
+                showErrorNotification(taskId, fileName, e.message ?: "Error")
 
                 when (e) {
                     is UnknownHostException,
@@ -227,11 +210,88 @@ class UploadWorker @AssistedInject constructor(
                         Result.failure()
                     }
                 }
-            } finally {
-                if (taskDao.getById(taskId)?.statusType == "COMPLETED") {
-                    notificationManager.cancelNotification(taskId)
-                }
             }
         }
+    }
+
+    private fun createForegroundInfo(
+        taskId: String,
+        fileName: String,
+        progress: Int,
+        bytesUploaded: Long,
+        totalBytes: Long
+    ): ForegroundInfo {
+        createNotificationChannel()
+
+        val notificationId = NOTIFICATION_ID_BASE + taskId.hashCode()
+
+        val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)
+            .setContentTitle("Uploading $fileName")
+            .setContentText("${formatBytes(bytesUploaded)} / ${formatBytes(totalBytes)}  ($progress%)")
+            .setSmallIcon(android.R.drawable.stat_sys_upload)
+            .setProgress(100, progress, false)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ForegroundInfo(notificationId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            ForegroundInfo(notificationId, notification)
+        }
+    }
+
+    private fun showCompleteNotification(taskId: String, fileName: String) {
+        createNotificationChannel()
+        val notificationId = NOTIFICATION_ID_BASE + taskId.hashCode()
+
+        val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)
+            .setContentTitle("Upload Complete")
+            .setContentText("$fileName uploaded successfully")
+            .setSmallIcon(android.R.drawable.stat_sys_upload_done)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+
+        notificationManager.notify(notificationId, notification)
+    }
+
+    private fun showErrorNotification(taskId: String, fileName: String, error: String) {
+        createNotificationChannel()
+        val notificationId = NOTIFICATION_ID_BASE + taskId.hashCode()
+
+        val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)
+            .setContentTitle("Upload Failed")
+            .setContentText("$fileName: $error")
+            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+
+        notificationManager.notify(notificationId, notification)
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                NOTIFICATION_CHANNEL_ID,
+                NOTIFICATION_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Shows progress of file uploads"
+                setShowBadge(false)
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        if (bytes < 1024) return "$bytes B"
+        val kb = bytes / 1024.0
+        if (kb < 1024) return "%.1f KB".format(kb)
+        val mb = kb / 1024.0
+        if (mb < 1024) return "%.1f MB".format(mb)
+        return "%.2f GB".format(mb / 1024.0)
     }
 }

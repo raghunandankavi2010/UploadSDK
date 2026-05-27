@@ -1,0 +1,39 @@
+[07:10:34] RAW COMMIT BODY: {"checksum":"9d278f3ec71f412e194e5fde7b07f4f4afa95c9773bfad462f443344dd81854a","fileName":"rice_leaf_blast_04.jpg","metadata":{},"mimeType":"image/jpeg","sessionId":"sess_de23433ef9d8ff83","taskId":"0b14f78c-58ef-4347-8b74-34e88211a137","totalChunks":1}
+[07:10:34] COMMIT PARSED: taskId=0b14f78c-58ef-4347-8b74-34e88211a137 | fileName=rice_leaf_blast_04.jpg | totalChunks=1
+[07:10:34] ALL SESSIONS: []
+[07:10:34] COMMIT FALLBACK: auto-creating session for 0b14f78c-58ef-4347-8b74-34e88211a137
+[07:10:34]   -> merged chunk 0
+[07:10:34] COMMIT SUCCESS: taskId=0b14f78c-58ef-4347-8b74-34e88211a137 | saved=rice_leaf_blast_04.jpg | 11384 bytes
+[07:29:46] RAW INIT BODY: {"checksum":"a475bb022a17e185673915609fdd95d15a99c6008862ee361b5ab7cd408bc57b","fileName":"rice_leaf_blast_01.jpg","metadata":{},"mimeType":"application/octet-stream","taskId":"6bcba73b-1321-4747-99f8-415b71ad6f08","totalBytes":26221,"totalChunks":1}
+[07:29:46] PARSED KEYS: ['checksum', 'fileName', 'metadata', 'mimeType', 'taskId', 'totalBytes', 'totalChunks']
+[07:29:46] INIT SUCCESS: taskId=6bcba73b-1321-4747-99f8-415b71ad6f08 | sessionId=sess_44a03b83c9d6f20f | file=rice_leaf_blast_01.jpg | chunks=1
+[07:29:47] CHUNK REQUEST: task_id=6bcba73b-1321-4747-99f8-415b71ad6f08 | chunk_index=0 | total_chunks=1
+[07:29:47] CHUNK STORED: taskId=6bcba73b-1321-4747-99f8-415b71ad6f08 | chunk=1/1 | 26221 bytes
+[07:29:48] RAW COMMIT BODY: {"checksum":"a475bb022a17e185673915609fdd95d15a99c6008862ee361b5ab7cd408bc57b","fileName":"rice_leaf_blast_01.jpg","metadata":{},"mimeType":"image/jpeg","sessionId":"sess_44a03b83c9d6f20f","taskId":"6bcba73b-1321-4747-99f8-415b71ad6f08","totalChunks":1}
+[07:29:48] COMMIT PARSED: taskId=6bcba73b-1321-4747-99f8-415b71ad6f08 | fileName=rice_leaf_blast_01.jpg | totalChunks=1
+[07:29:48] ALL SESSIONS: ['0b14f78c-58ef-4347-8b74-34e88211a137', '6bcba73b-1321-4747-99f8-415b71ad6f08']
+[07:29:48]   -> merged chunk 0
+[07:29:48] COMMIT SUCCESS: taskId=6bcba73b-1321-4747-99f8-415b71ad6f08 | saved=rice_leaf_blast_01.jpg | 26221 bytes
+[07:31:44] RAW INIT BODY: {"checksum":"7725af92d0b08c5d0bfad88651048710aef0ba405221487704e35d0b38698b18","fileName":"rice_brown_spot_03.jpg","metadata":{},"mimeType":"application/octet-stream","taskId":"b485b862-3104-4ab3-adf3-c2dde507df99","totalBytes":128454,"totalChunks":2}
+[07:31:44] PARSED KEYS: ['checksum', 'fileName', 'metadata', 'mimeType', 'taskId', 'totalBytes', 'totalChunks']
+[07:31:44] INIT SUCCESS: taskId=b485b862-3104-4ab3-adf3-c2dde507df99 | sessionId=sess_ace92ac11d300eb8 | file=rice_brown_spot_03.jpg | chunks=2
+[07:31:45] CHUNK REQUEST: task_id=b485b862-3104-4ab3-adf3-c2dde507df99 | chunk_index=0 | total_chunks=2
+[07:31:45] CHUNK STORED: taskId=b485b862-3104-4ab3-adf3-c2dde507df99 | chunk=1/2 | 65536 bytes
+[07:31:45] CHUNK REQUEST: task_id=b485b862-3104-4ab3-adf3-c2dde507df99 | chunk_index=1 | total_chunks=2
+[07:31:45] CHUNK STORED: taskId=b485b862-3104-4ab3-adf3-c2dde507df99 | chunk=2/2 | 62918 bytes
+[07:31:46] RAW COMMIT BODY: {"checksum":"7725af92d0b08c5d0bfad88651048710aef0ba405221487704e35d0b38698b18","fileName":"rice_brown_spot_03.jpg","metadata":{},"mimeType":"image/jpeg","sessionId":"sess_ace92ac11d300eb8","taskId":"b485b862-3104-4ab3-adf3-c2dde507df99","totalChunks":2}
+[07:31:46] COMMIT PARSED: taskId=b485b862-3104-4ab3-adf3-c2dde507df99 | fileName=rice_brown_spot_03.jpg | totalChunks=2
+[07:31:46] ALL SESSIONS: ['0b14f78c-58ef-4347-8b74-34e88211a137', '6bcba73b-1321-4747-99f8-415b71ad6f08', 'b485b862-3104-4ab3-adf3-c2dde507df99']
+[07:31:46]   -> merged chunk 0
+[07:31:46]   -> merged chunk 1
+[07:31:46] COMMIT SUCCESS: taskId=b485b862-3104-4ab3-adf3-c2dde507df99 | saved=rice_brown_spot_03.jpg | 128454 bytes
+[07:31:56] RAW INIT BODY: {"checksum":"a2689aab5f53b95dc5d0a84c2433f69ef16bc6003765cc984c2333fbeef07b1f","fileName":"rice_brown_spot_02.jpg","metadata":{},"mimeType":"application/octet-stream","taskId":"bf756638-3c69-4935-97f2-bfa6997e7361","totalBytes":41793,"totalChunks":1}
+[07:31:56] PARSED KEYS: ['checksum', 'fileName', 'metadata', 'mimeType', 'taskId', 'totalBytes', 'totalChunks']
+[07:31:56] INIT SUCCESS: taskId=bf756638-3c69-4935-97f2-bfa6997e7361 | sessionId=sess_175109ae78807c4b | file=rice_brown_spot_02.jpg | chunks=1
+[07:31:57] CHUNK REQUEST: task_id=bf756638-3c69-4935-97f2-bfa6997e7361 | chunk_index=0 | total_chunks=1
+[07:31:57] CHUNK STORED: taskId=bf756638-3c69-4935-97f2-bfa6997e7361 | chunk=1/1 | 41793 bytes
+[07:31:58] RAW COMMIT BODY: {"checksum":"a2689aab5f53b95dc5d0a84c2433f69ef16bc6003765cc984c2333fbeef07b1f","fileName":"rice_brown_spot_02.jpg","metadata":{},"mimeType":"image/jpeg","sessionId":"sess_175109ae78807c4b","taskId":"bf756638-3c69-4935-97f2-bfa6997e7361","totalChunks":1}
+[07:31:58] COMMIT PARSED: taskId=bf756638-3c69-4935-97f2-bfa6997e7361 | fileName=rice_brown_spot_02.jpg | totalChunks=1
+[07:31:58] ALL SESSIONS: ['0b14f78c-58ef-4347-8b74-34e88211a137', '6bcba73b-1321-4747-99f8-415b71ad6f08', 'b485b862-3104-4ab3-adf3-c2dde507df99', 'bf756638-3c69-4935-97f2-bfa6997e7361']
+[07:31:58]   -> merged chunk 0
+[07:31:58] COMMIT SUCCESS: taskId=bf756638-3c69-4935-97f2-bfa6997e7361 | saved=rice_brown_spot_02.jpg | 41793 bytes

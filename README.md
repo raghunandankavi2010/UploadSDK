@@ -129,6 +129,10 @@ Based on Rahul Ray's system design principles for mobile upload SDKs.
 - **Navigation**: NavHost with list -> detail flow
 
 ## Quick Start
+### Local server
+1. cd local-server
+2. pip3 install -r requirements.txt
+3. pip3 install flask werkzeug
 
 ### 1. Add dependency
 ```kotlin

@@ -1,0 +1,63 @@
+{
+  "0b14f78c-58ef-4347-8b74-34e88211a137": {
+    "sessionId": "sess_fallback_0b14f78c",
+    "fileName": "rice_leaf_blast_04.jpg",
+    "mimeType": "application/octet-stream",
+    "totalBytes": 0,
+    "totalChunks": 1,
+    "checksum": "",
+    "uploadedChunks": [
+      0
+    ],
+    "createdAt": 1779846034.284099,
+    "status": "completed",
+    "remoteUrl": "http://10.0.2.2:5000/uploads/rice_leaf_blast_04.jpg",
+    "fileId": "file_0b14f78c-58ef-4347-8b74-34e88211a137"
+  },
+  "6bcba73b-1321-4747-99f8-415b71ad6f08": {
+    "sessionId": "sess_44a03b83c9d6f20f",
+    "fileName": "rice_leaf_blast_01.jpg",
+    "mimeType": "application/octet-stream",
+    "totalBytes": 26221,
+    "totalChunks": 1,
+    "checksum": "a475bb022a17e185673915609fdd95d15a99c6008862ee361b5ab7cd408bc57b",
+    "uploadedChunks": [
+      0
+    ],
+    "createdAt": 1779847186.6572769,
+    "status": "completed",
+    "remoteUrl": "http://10.0.2.2:5000/uploads/rice_leaf_blast_01.jpg",
+    "fileId": "file_6bcba73b-1321-4747-99f8-415b71ad6f08"
+  },
+  "b485b862-3104-4ab3-adf3-c2dde507df99": {
+    "sessionId": "sess_ace92ac11d300eb8",
+    "fileName": "rice_brown_spot_03.jpg",
+    "mimeType": "application/octet-stream",
+    "totalBytes": 128454,
+    "totalChunks": 2,
+    "checksum": "7725af92d0b08c5d0bfad88651048710aef0ba405221487704e35d0b38698b18",
+    "uploadedChunks": [
+      0,
+      1
+    ],
+    "createdAt": 1779847304.831291,
+    "status": "completed",
+    "remoteUrl": "http://10.0.2.2:5000/uploads/rice_brown_spot_03.jpg",
+    "fileId": "file_b485b862-3104-4ab3-adf3-c2dde507df99"
+  },
+  "bf756638-3c69-4935-97f2-bfa6997e7361": {
+    "sessionId": "sess_175109ae78807c4b",
+    "fileName": "rice_brown_spot_02.jpg",
+    "mimeType": "application/octet-stream",
+    "totalBytes": 41793,
+    "totalChunks": 1,
+    "checksum": "a2689aab5f53b95dc5d0a84c2433f69ef16bc6003765cc984c2333fbeef07b1f",
+    "uploadedChunks": [
+      0
+    ],
+    "createdAt": 1779847316.361394,
+    "status": "completed",
+    "remoteUrl": "http://10.0.2.2:5000/uploads/rice_brown_spot_02.jpg",
+    "fileId": "file_bf756638-3c69-4935-97f2-bfa6997e7361"
+  }
+}

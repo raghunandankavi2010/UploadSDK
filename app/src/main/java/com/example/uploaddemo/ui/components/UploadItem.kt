@@ -25,6 +25,7 @@ fun UploadItem(
     onPause: () -> Unit,
     onResume: () -> Unit,
     onCancel: () -> Unit,
+    onCompleted: () -> Unit,
     onRetry: () -> Unit,
     onClick: () -> Unit = {}
 ) {
@@ -99,6 +100,7 @@ fun UploadItem(
                     onPause = onPause,
                     onResume = onResume,
                     onCancel = onCancel,
+                    onCompleted = onCompleted,
                     onRetry = onRetry
                 )
             }
@@ -177,6 +179,7 @@ fun UploadActions(
     status: UploadStatus,
     onPause: () -> Unit,
     onResume: () -> Unit,
+    onCompleted: () -> Unit,
     onCancel: () -> Unit,
     onRetry: () -> Unit
 ) {
@@ -210,7 +213,7 @@ fun UploadActions(
                 }
             }
             is UploadStatus.Completed -> {
-                IconButton(onClick = onCancel, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onCompleted, modifier = Modifier.size(32.dp)) {
                     Icon(Icons.Default.Delete, contentDescription = "Remove", tint = UploadGray)
                 }
             }

@@ -2,6 +2,7 @@ package com.uploadsdk.data.remote.dto
 
 // Request DTOs
 data class InitUploadRequest(
+    val taskId: String,
     val fileName: String,
     val mimeType: String,
     val totalBytes: Long,

@@ -25,6 +25,7 @@ class SessionManager @Inject constructor(
         checksum: String
     ): SessionInfo {
         val request = InitUploadRequest(
+            taskId = taskId,
             fileName = fileName,
             mimeType = "application/octet-stream",
             totalBytes = totalBytes,
@@ -53,38 +54,17 @@ class SessionManager @Inject constructor(
     }
 
     override suspend fun refreshSession(sessionId: String): SessionInfo {
-        // Recover the taskId associated with this sessionId
-        val sessionEntity = sessionDao.getBySessionId(sessionId)
-            ?: throw UploadException.InvalidFileException("No local session found for ID: $sessionId")
-
-        val request = RefreshSessionRequest(sessionId, sessionEntity.taskId)
+        val request = com.uploadsdk.data.remote.dto.RefreshSessionRequest(sessionId, "")
         val response = apiService.refreshSession(request)
         val body = response.body()
-
         if (response.isSuccessful && body?.success == true) {
-            val updatedSession = SessionInfo(
+            return SessionInfo(
                 sessionId = body.sessionId,
                 uploadUrl = body.uploadUrl,
-                expiresAt = body.expiresAt,
-                offset = sessionEntity.offset
+                expiresAt = body.expiresAt
             )
-
-            // Update local database to keep it in sync
-            sessionDao.insert(
-                sessionEntity.copy(
-                    uploadUrl = updatedSession.uploadUrl,
-                    expiresAt = updatedSession.expiresAt
-                )
-            )
-
-            return updatedSession
         }
-
-        val errorMessage = body?.message ?: response.errorBody()?.string() ?: "Unknown error"
-        throw UploadException.ServerException(
-            "Failed to refresh session: $errorMessage",
-            response.code()
-        )
+        throw Exception("Failed to refresh session")
     }
 
     override suspend fun getSession(taskId: String): SessionInfo? {

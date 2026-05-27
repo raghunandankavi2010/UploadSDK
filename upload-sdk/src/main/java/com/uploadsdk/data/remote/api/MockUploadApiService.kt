@@ -87,6 +87,7 @@ class MockUploadApiService @Inject constructor() : UploadApiService {
         return initUpload(
             InitUploadRequest(
                 fileName = "refreshed",
+                taskId = "1",
                 mimeType = "application/octet-stream",
                 totalBytes = 0,
                 totalChunks = 0,
