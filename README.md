@@ -318,15 +318,21 @@ The SDK includes MockUploadApiService for testing without a real backend.
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|------------|
-| Language | Kotlin 1.9 |
-| Async | Coroutines + Flow |
-| UI | Jetpack Compose + Material3 |
-| DI | Hilt 2.50 |
-| Database | Room 2.6.1 |
-| Background | WorkManager 2.9.0 |
-| Network | Retrofit 2.9 + OkHttp 4.12 |
+| Component | Technology | Version |
+|-----------|------------|---------|
+| Language | Kotlin | 2.3.21 |
+| Build Tool | Gradle (Kotlin DSL) | 8.x |
+| UI Framework | Jetpack Compose (BOM) | 2024.02.00 |
+| Design System | Material Design 3 | Latest |
+| Architecture | MVVM + Clean Architecture | - |
+| Dependency Injection | Hilt | 2.59.2 |
+| Background Task | WorkManager (Ktx) | 2.9.0 |
+| Database | Room | 2.8.4 |
+| Networking | Retrofit + OkHttp | 2.9.0 / 4.12.0 |
+| Concurrency | Coroutines + Flow | 1.7.3 |
+| Image Loading | Coil | 2.5.0 |
+| JSON Parsing | Gson | 2.10.1 |
+| Analysis | KSP | 2.3.7 |
 
 ## License
 
