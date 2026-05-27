@@ -6,6 +6,7 @@ interface SessionRepository {
     suspend fun createSession(
         taskId: String,
         fileName: String,
+        mimeType: String,
         totalBytes: Long,
         totalChunks: Int,
         checksum: String

@@ -40,7 +40,7 @@ class UploadFileValidator @Inject constructor() {
             "maxFileSize" to MAX_FILE_SIZE,
             "maxFileSizeFormatted" to "2 GB",
             "allowedExtensions" to ALLOWED_EXTENSIONS,
-            "maxConcurrentUploads" to UploadQueueManager.MAX_CONCURRENT_UPLOADS
+            "maxConcurrentUploads" to UploadQueueManager.DEFAULT_MAX_CONCURRENT_UPLOADS
         )
     }
 }

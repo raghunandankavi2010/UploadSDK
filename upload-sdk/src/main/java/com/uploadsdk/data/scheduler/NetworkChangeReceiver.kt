@@ -25,23 +25,28 @@ class NetworkChangeReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (isOnline(context)) {
             UploadLogger.d("Network restored - checking for pending uploads")
+            val pendingResult = goAsync()
             CoroutineScope(Dispatchers.IO).launch {
-                val pendingTasks = database.uploadTaskDao().getPendingTasks()
-                pendingTasks.forEach { task ->
-                    if (task.statusType == "PAUSED" || task.statusType == "FAILED") {
-                        scheduler.scheduleResume(
-                            task.taskId,
-                            androidx.work.workDataOf(
-                                "task_id" to task.taskId,
-                                "file_path" to task.filePath,
-                                "file_name" to task.fileName,
-                                "mime_type" to task.mimeType,
-                                "chunk_size" to task.chunkSize,
-                                "total_bytes" to task.totalBytes,
-                                "is_resume" to true
+                try {
+                    val pendingTasks = database.uploadTaskDao().getPendingTasks()
+                    pendingTasks.forEach { task ->
+                        if (task.statusType == "PAUSED" || task.statusType == "FAILED") {
+                            scheduler.scheduleResume(
+                                task.taskId,
+                                androidx.work.workDataOf(
+                                    "task_id" to task.taskId,
+                                    "file_path" to task.filePath,
+                                    "file_name" to task.fileName,
+                                    "mime_type" to task.mimeType,
+                                    "chunk_size" to task.chunkSize,
+                                    "total_bytes" to task.totalBytes,
+                                    "is_resume" to true
+                                )
                             )
-                        )
+                        }
                     }
+                } finally {
+                    pendingResult.finish()
                 }
             }
         }

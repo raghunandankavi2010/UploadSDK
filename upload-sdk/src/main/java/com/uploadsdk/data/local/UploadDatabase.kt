@@ -12,7 +12,7 @@ import com.uploadsdk.data.local.entity.UploadTaskEntity
 @Database(
     entities = [UploadTaskEntity::class, ChunkEntity::class, SessionEntity::class],
     version = 1,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class UploadDatabase : RoomDatabase() {
     abstract fun uploadTaskDao(): UploadTaskDao

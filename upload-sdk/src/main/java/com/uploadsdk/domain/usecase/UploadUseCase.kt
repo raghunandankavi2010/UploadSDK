@@ -1,5 +1,6 @@
 package com.uploadsdk.domain.usecase
 
+import com.uploadsdk.domain.model.ChunkInfo
 import com.uploadsdk.domain.model.UploadResult
 import com.uploadsdk.domain.model.UploadTask
 import com.uploadsdk.domain.repository.UploadRepository
@@ -47,5 +48,9 @@ class UploadUseCase @Inject constructor(
 
     suspend fun clearCompleted() {
         repository.clearCompletedUploads()
+    }
+
+    suspend fun getChunkProgress(taskId: String): List<ChunkInfo> {
+        return repository.getChunkProgress(taskId)
     }
 }

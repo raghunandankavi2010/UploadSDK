@@ -25,14 +25,16 @@ class UploadWorkObserver @Inject constructor(
                 val bytes = progress.getLong(UploadWorker.BYTES_UPLOADED, 0L)
                 val total = progress.getLong(UploadWorker.TOTAL_BYTES, 0L)
                 val speed = progress.getDouble(UploadWorker.SPEED_KBPS, 0.0)
+                val eta = progress.getLong(UploadWorker.ETA_SECONDS, -1L)
 
                 UploadResult.Progress(
                     taskId = taskId,
-                    fileName = "", // Filename not available in WorkManager progress, will be filled by combine
+                    fileName = "",
                     percent = percent,
                     bytesUploaded = bytes,
                     totalBytes = total,
-                    speedKbps = speed
+                    speedKbps = speed,
+                    etaSeconds = eta
                 )
             }
     }
@@ -45,12 +47,14 @@ class UploadWorkObserver @Inject constructor(
             }
     }
 
-    fun isWorkRunning(taskId: String): Boolean {
-        val workInfos = WorkManager.getInstance(context)
-            .getWorkInfosForUniqueWork("upload_$taskId")
-            .get()
-        return workInfos.any {
-            it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED
+    suspend fun isWorkRunning(taskId: String): Boolean {
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val workInfos = WorkManager.getInstance(context)
+                .getWorkInfosForUniqueWork("upload_$taskId")
+                .get()
+            workInfos.any {
+                it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED
+            }
         }
     }
 }

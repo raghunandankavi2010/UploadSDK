@@ -1,5 +1,7 @@
 package com.uploadsdk.data.preprocessor
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
 import java.security.MessageDigest
@@ -9,7 +11,7 @@ import javax.inject.Singleton
 @Singleton
 class ChecksumCalculator @Inject constructor() {
 
-    suspend fun calculate(file: File): String {
+    suspend fun calculate(file: File): String = withContext(Dispatchers.IO) {
         val digest = MessageDigest.getInstance("SHA-256")
         FileInputStream(file).use { fis ->
             val buffer = ByteArray(8192)
@@ -18,7 +20,7 @@ class ChecksumCalculator @Inject constructor() {
                 digest.update(buffer, 0, bytesRead)
             }
         }
-        return digest.digest().joinToString("") { "%02x".format(it) }
+        digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     fun calculateChunk(data: ByteArray): String {

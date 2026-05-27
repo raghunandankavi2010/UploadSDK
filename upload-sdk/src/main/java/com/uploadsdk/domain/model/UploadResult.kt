@@ -21,7 +21,8 @@ sealed class UploadResult {
         val percent: Int,
         val bytesUploaded: Long,
         val totalBytes: Long,
-        val speedKbps: Double = 0.0
+        val speedKbps: Double = 0.0,
+        val etaSeconds: Long = -1
     ) : UploadResult()
 
     data class Success(

@@ -15,6 +15,7 @@ import com.uploadsdk.data.worker.UploadWorkObserver
 import com.uploadsdk.data.worker.UploadWorker
 import com.uploadsdk.domain.model.*
 import com.uploadsdk.domain.repository.UploadRepository
+import com.uploadsdk.util.UploadLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import java.io.File
@@ -28,7 +29,8 @@ class UploadRepositoryImpl @Inject constructor(
     private val preprocessor: FilePreprocessor,
     private val chunkEngine: ChunkEngine,
     private val scheduler: UploadScheduler,
-    private val workObserver: UploadWorkObserver
+    private val workObserver: UploadWorkObserver,
+    private val config: com.uploadsdk.config.UploadConfig
 ) : UploadRepository {
 
     private val taskDao = database.uploadTaskDao()
@@ -92,7 +94,8 @@ class UploadRepositoryImpl @Inject constructor(
             UploadWorker.KEY_CHUNK_SIZE to task.chunkSize,
             UploadWorker.KEY_TOTAL_BYTES to file.length(),
             UploadWorker.KEY_TOTAL_CHUNKS to chunks.size,
-            UploadWorker.KEY_CHECKSUM to preprocessResult.checksum
+            UploadWorker.KEY_CHECKSUM to preprocessResult.checksum,
+            UploadWorker.KEY_PARALLEL_CHUNKS to config.parallelUploads
         )
 
         scheduler.scheduleUpload(taskId, task.priority, inputData)
@@ -106,6 +109,12 @@ class UploadRepositoryImpl @Inject constructor(
 
     override suspend fun deleteUpload(taskId: String) {
         scheduler.cancelUpload(taskId)
+        val entity = taskDao.getById(taskId)
+        if (entity != null) {
+            cleanupCachedFiles(entity.filePath, entity.thumbnailPath)
+        }
+        chunkDao.deleteByTaskId(taskId)
+        database.sessionDao().deleteByTaskId(taskId)
         taskDao.deleteById(taskId)
     }
 
@@ -133,7 +142,8 @@ class UploadRepositoryImpl @Inject constructor(
             UploadWorker.KEY_TOTAL_BYTES to entity.totalBytes,
             UploadWorker.KEY_TOTAL_CHUNKS to entity.totalChunks,
             UploadWorker.KEY_CHECKSUM to (entity.checksum ?: ""),
-            UploadWorker.KEY_IS_RESUME to true
+            UploadWorker.KEY_IS_RESUME to true,
+            UploadWorker.KEY_PARALLEL_CHUNKS to config.parallelUploads
         )
 
         val priority = try {
@@ -194,7 +204,27 @@ class UploadRepositoryImpl @Inject constructor(
     }
 
     override suspend fun clearCompletedUploads() {
+        val completed = taskDao.observeAll().first().filter { it.statusType == "COMPLETED" }
+        completed.forEach { task ->
+            cleanupCachedFiles(task.filePath, task.thumbnailPath)
+            chunkDao.deleteByTaskId(task.taskId)
+            database.sessionDao().deleteByTaskId(task.taskId)
+        }
         taskDao.deleteCompleted()
+    }
+
+    override suspend fun getChunkProgress(taskId: String): List<ChunkInfo> {
+        return chunkDao.getByTaskId(taskId).map { entity ->
+            ChunkInfo(
+                chunkIndex = entity.chunkIndex,
+                startByte = entity.startByte,
+                endByte = entity.endByte,
+                isUploaded = entity.isUploaded,
+                eTag = entity.eTag,
+                checksum = entity.checksum,
+                size = entity.size
+            )
+        }
     }
 
     override suspend fun getUploadHistory(): List<UploadTask> {
@@ -238,6 +268,18 @@ class UploadRepositoryImpl @Inject constructor(
             )
             "CANCELLED" -> UploadResult.Cancelled(entity.taskId, entity.fileName)
             else -> UploadResult.Enqueued(entity.taskId, entity.fileName)
+        }
+    }
+
+    private fun cleanupCachedFiles(filePath: String, thumbnailPath: String?) {
+        try {
+            val file = File(filePath)
+            if (file.absolutePath.startsWith(context.cacheDir.absolutePath)) {
+                file.delete()
+            }
+            thumbnailPath?.let { File(it).delete() }
+        } catch (e: Exception) {
+            UploadLogger.e("Failed to cleanup cached files", e)
         }
     }
 

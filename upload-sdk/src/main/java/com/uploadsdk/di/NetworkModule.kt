@@ -20,16 +20,16 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(authInterceptor: AuthInterceptor): OkHttpClient {
+    fun provideOkHttpClient(authInterceptor: AuthInterceptor, config: UploadConfig): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = HttpLoggingInterceptor.Level.HEADERS
         }
         return OkHttpClient.Builder()
             .addInterceptor(authInterceptor)
             .addInterceptor(logging)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS)
+            .connectTimeout(config.timeoutMs, TimeUnit.MILLISECONDS)
+            .readTimeout(config.timeoutMs * 2, TimeUnit.MILLISECONDS)
+            .writeTimeout(config.timeoutMs * 2, TimeUnit.MILLISECONDS)
             .retryOnConnectionFailure(true)
             .build()
     }

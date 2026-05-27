@@ -28,6 +28,7 @@ class ChunkUploader @Inject constructor(
         totalChunks: Int,
         mimeType: String
     ): Result<String> {
+        var tempFile: java.io.File? = null
         return try {
             val length = (chunk.endByte - chunk.startByte + 1).toInt()
             val buffer = ByteArray(length)
@@ -36,7 +37,7 @@ class ChunkUploader @Inject constructor(
                 raf.readFully(buffer)
             }
 
-            val tempFile = java.io.File.createTempFile("chunk_${chunk.chunkIndex}", ".tmp")
+            tempFile = java.io.File.createTempFile("chunk_${chunk.chunkIndex}", ".tmp")
             tempFile.writeBytes(buffer)
 
             val requestFile = tempFile.asRequestBody(mimeType.toMediaTypeOrNull())
@@ -57,8 +58,6 @@ class ChunkUploader @Inject constructor(
                 sessionId = sessionIdBody
             )
 
-            tempFile.delete()
-
             if (response.isSuccessful && response.body()?.success == true) {
                 val eTag = response.body()?.eTag ?: "etag_${chunk.chunkIndex}"
                 chunkDao.markUploaded(taskId, chunk.chunkIndex, eTag)
@@ -71,6 +70,8 @@ class ChunkUploader @Inject constructor(
         } catch (e: Exception) {
             chunkDao.markFailed(taskId, chunk.chunkIndex, e.message ?: "Exception occurred")
             Result.failure(e)
+        } finally {
+            tempFile?.delete()
         }
     }
 }

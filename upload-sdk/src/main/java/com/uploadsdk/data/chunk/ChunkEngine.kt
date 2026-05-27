@@ -1,5 +1,6 @@
 package com.uploadsdk.data.chunk
 
+import com.uploadsdk.data.preprocessor.ChecksumCalculator
 import com.uploadsdk.domain.model.ChunkInfo
 import com.uploadsdk.domain.repository.ChunkRepository
 import kotlinx.coroutines.Dispatchers
@@ -10,7 +11,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class ChunkEngine @Inject constructor() : ChunkRepository {
+class ChunkEngine @Inject constructor(
+    private val checksumCalculator: ChecksumCalculator
+) : ChunkRepository {
 
     override suspend fun splitFileIntoChunks(file: File, chunkSize: Int): List<ChunkInfo> {
         val fileSize = file.length()
@@ -63,14 +66,6 @@ class ChunkEngine @Inject constructor() : ChunkRepository {
     }
 
     override suspend fun computeFileChecksum(file: File): String {
-        val digest = java.security.MessageDigest.getInstance("SHA-256")
-        java.io.FileInputStream(file).use { fis ->
-            val buffer = ByteArray(8192)
-            var bytesRead: Int
-            while (fis.read(buffer).also { bytesRead = it } != -1) {
-                digest.update(buffer, 0, bytesRead)
-            }
-        }
-        return digest.digest().joinToString("") { "%02x".format(it) }
+        return checksumCalculator.calculate(file)
     }
 }

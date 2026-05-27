@@ -1,5 +1,6 @@
 package com.uploadsdk.presentation
 
+import com.uploadsdk.domain.model.ChunkInfo
 import com.uploadsdk.domain.model.UploadPriority
 import com.uploadsdk.domain.model.UploadResult
 import com.uploadsdk.domain.model.UploadTask
@@ -73,5 +74,9 @@ class UploadManager @Inject constructor(
 
     suspend fun clearCompleted() {
         uploadUseCase.clearCompleted()
+    }
+
+    suspend fun getChunkProgress(taskId: String): List<ChunkInfo> {
+        return uploadUseCase.getChunkProgress(taskId)
     }
 }

@@ -3,10 +3,6 @@ package com.uploadsdk.presentation
 import android.content.Context
 import com.uploadsdk.config.UploadConfig
 
-/**
- * Builder pattern for creating UploadSdk instances.
- * Java-friendly API for non-Hilt environments.
- */
 class UploadSdkBuilder(private val context: Context) {
     private var config = UploadConfig(baseUrl = "")
 
@@ -21,6 +17,7 @@ class UploadSdkBuilder(private val context: Context) {
     fun authProvider(provider: () -> String) = apply { config = config.copy(authTokenProvider = provider) }
 
     fun build(): UploadSdk {
-        return UploadSdk.create(context)
+        require(config.baseUrl.isNotBlank()) { "baseUrl must be set" }
+        return UploadSdk.create(context, config)
     }
 }

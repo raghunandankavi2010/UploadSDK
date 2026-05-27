@@ -20,6 +20,7 @@ class SessionManager @Inject constructor(
     override suspend fun createSession(
         taskId: String,
         fileName: String,
+        mimeType: String,
         totalBytes: Long,
         totalChunks: Int,
         checksum: String
@@ -27,7 +28,7 @@ class SessionManager @Inject constructor(
         val request = InitUploadRequest(
             taskId = taskId,
             fileName = fileName,
-            mimeType = "application/octet-stream",
+            mimeType = mimeType,
             totalBytes = totalBytes,
             totalChunks = totalChunks,
             checksum = checksum
@@ -68,14 +69,17 @@ class SessionManager @Inject constructor(
     }
 
     override suspend fun getSession(taskId: String): SessionInfo? {
-        return sessionDao.getByTaskId(taskId)?.let {
-            SessionInfo(
-                sessionId = it.sessionId,
-                uploadUrl = it.uploadUrl,
-                expiresAt = it.expiresAt,
-                offset = it.offset
-            )
+        val entity = sessionDao.getByTaskId(taskId) ?: return null
+        if (entity.expiresAt < System.currentTimeMillis()) {
+            sessionDao.deleteByTaskId(taskId)
+            return null
         }
+        return SessionInfo(
+            sessionId = entity.sessionId,
+            uploadUrl = entity.uploadUrl,
+            expiresAt = entity.expiresAt,
+            offset = entity.offset
+        )
     }
 
     override suspend fun invalidateSession(taskId: String) {

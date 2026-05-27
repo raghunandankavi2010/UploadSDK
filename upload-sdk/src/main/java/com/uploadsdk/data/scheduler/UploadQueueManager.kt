@@ -2,19 +2,26 @@ package com.uploadsdk.data.scheduler
 
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.uploadsdk.config.UploadConfig
 import com.uploadsdk.util.UploadLogger
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class UploadQueueManager @Inject constructor(
-    private val workManager: WorkManager
+    private val workManager: WorkManager,
+    private val config: UploadConfig
 ) {
     companion object {
-        const val MAX_CONCURRENT_UPLOADS = 3
+        const val DEFAULT_MAX_CONCURRENT_UPLOADS = 3
     }
+
+    val maxConcurrentUploads: Int
+        get() = config.parallelUploads.coerceIn(1, 5)
 
     fun getActiveUploadCount(): Flow<Int> {
         return workManager.getWorkInfosByTagFlow("upload_task")
@@ -27,22 +34,16 @@ class UploadQueueManager @Inject constructor(
 
     fun canEnqueueNewUpload(): Flow<Boolean> {
         return getActiveUploadCount().map { count ->
-            count < MAX_CONCURRENT_UPLOADS
+            count < maxConcurrentUploads
         }
     }
 
-    suspend fun waitForSlot(): Boolean {
-        var attempts = 0
-        while (attempts < 30) {
-            val activeCount = workManager.getWorkInfosByTag("upload_task").get()
-                .count { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }
-            if (activeCount < MAX_CONCURRENT_UPLOADS) {
-                return true
-            }
-            UploadLogger.d("Queue full ($activeCount active), waiting for slot...")
-            kotlinx.coroutines.delay(1000)
-            attempts++
-        }
-        return false
+    suspend fun getActiveCount(): Int = withContext(Dispatchers.IO) {
+        workManager.getWorkInfosByTag("upload_task").get()
+            .count { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }
+    }
+
+    suspend fun hasCapacity(): Boolean {
+        return getActiveCount() < maxConcurrentUploads
     }
 }

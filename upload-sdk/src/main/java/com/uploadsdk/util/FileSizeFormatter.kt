@@ -16,4 +16,15 @@ object FileSizeFormatter {
         val mbps = kbps / 1024.0
         return "%.1f MB/s".format(mbps)
     }
+
+    fun formatEta(seconds: Long): String {
+        if (seconds < 0) return ""
+        if (seconds < 60) return "${seconds}s remaining"
+        val minutes = seconds / 60
+        val secs = seconds % 60
+        if (minutes < 60) return "${minutes}m ${secs}s remaining"
+        val hours = minutes / 60
+        val mins = minutes % 60
+        return "${hours}h ${mins}m remaining"
+    }
 }

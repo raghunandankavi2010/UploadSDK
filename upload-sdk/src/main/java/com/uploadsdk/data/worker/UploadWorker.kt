@@ -17,18 +17,21 @@ import com.uploadsdk.data.coordinator.SessionManager
 import com.uploadsdk.data.local.UploadDatabase
 import com.uploadsdk.data.remote.api.UploadApiService
 import com.uploadsdk.data.remote.dto.CommitUploadRequest
-import com.uploadsdk.domain.model.SessionInfo
 import com.uploadsdk.util.UploadAnalytics
 import com.uploadsdk.util.UploadSpeedCalculator
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
-import kotlin.system.measureTimeMillis
 
 @HiltWorker
 class UploadWorker @AssistedInject constructor(
@@ -52,13 +55,15 @@ class UploadWorker @AssistedInject constructor(
         const val KEY_TOTAL_CHUNKS = "total_chunks"
         const val KEY_CHECKSUM = "checksum"
         const val KEY_IS_RESUME = "is_resume"
+        const val KEY_PARALLEL_CHUNKS = "parallel_chunks"
 
-        const val PROGRESS = "progress"
-        const val BYTES_UPLOADED = "bytes_uploaded"
-        const val TOTAL_BYTES = "total_bytes"
-        const val CURRENT_CHUNK = "current_chunk"
-        const val TOTAL_CHUNKS = "total_chunks"
-        const val SPEED_KBPS = "speed_kbps"
+        const val PROGRESS = "progress_percent"
+        const val BYTES_UPLOADED = "progress_bytes_uploaded"
+        const val TOTAL_BYTES = "progress_total_bytes"
+        const val CURRENT_CHUNK = "progress_current_chunk"
+        const val TOTAL_CHUNKS = "progress_total_chunks"
+        const val SPEED_KBPS = "progress_speed_kbps"
+        const val ETA_SECONDS = "progress_eta_seconds"
 
         const val NOTIFICATION_CHANNEL_ID = "upload_sdk_channel"
         const val NOTIFICATION_CHANNEL_NAME = "File Uploads"
@@ -68,7 +73,8 @@ class UploadWorker @AssistedInject constructor(
     private val taskDao = database.uploadTaskDao()
     private val chunkDao = database.chunkDao()
     private val speedCalculator = UploadSpeedCalculator()
-    private val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    private val notificationManager =
+        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
     override suspend fun doWork(): Result {
         val taskId = inputData.getString(KEY_TASK_ID) ?: return Result.failure()
@@ -79,6 +85,7 @@ class UploadWorker @AssistedInject constructor(
         val totalChunks = inputData.getInt(KEY_TOTAL_CHUNKS, 0)
         val checksum = inputData.getString(KEY_CHECKSUM) ?: ""
         val isResume = inputData.getBoolean(KEY_IS_RESUME, false)
+        val parallelChunks = inputData.getInt(KEY_PARALLEL_CHUNKS, 3)
 
         val file = File(filePath)
         if (!file.exists()) {
@@ -86,8 +93,11 @@ class UploadWorker @AssistedInject constructor(
             return Result.failure()
         }
 
-        // Show notification immediately at 0%
-        setForeground(createForegroundInfo(taskId, fileName, 0, 0, totalBytes))
+        try {
+            setForeground(createForegroundInfo(taskId, fileName, 0, 0, totalBytes))
+        } catch (e: Exception) {
+            // ForegroundServiceStartNotAllowedException on Android 12+ if system blocks it
+        }
 
         val startTime = System.currentTimeMillis()
         analytics.trackUploadStart(taskId, totalBytes, mimeType)
@@ -98,62 +108,24 @@ class UploadWorker @AssistedInject constructor(
 
                 val session = if (isResume) {
                     sessionManager.getSession(taskId) ?: sessionManager.createSession(
-                        taskId, fileName, totalBytes, totalChunks, checksum
+                        taskId, fileName, mimeType, totalBytes, totalChunks, checksum
                     )
                 } else {
-                    sessionManager.createSession(taskId, fileName, totalBytes, totalChunks, checksum)
+                    sessionManager.createSession(
+                        taskId, fileName, mimeType, totalBytes, totalChunks, checksum
+                    )
                 }
 
-                var uploadedChunks = chunkDao.getUploadedCount(taskId)
-                var bytesUploaded = uploadedChunks * (totalBytes / max(totalChunks, 1))
-
-                while (true) {
-                    val chunk = chunkDao.getNextPendingChunk(taskId) ?: break
-
-                    val chunkStartTime = System.currentTimeMillis()
-                    val result = retryCoordinator.executeWithRetry(
-                        maxRetries = 3,
-                        isRetryable = { it is UnknownHostException || it is SocketTimeoutException }
-                    ) {
-                        chunkUploader.uploadChunk(
-                            file = file,
-                            chunk = chunk,
-                            taskId = taskId,
-                            sessionId = session.sessionId,
-                            totalChunks = totalChunks,
-                            mimeType = mimeType
-                        )
-                    }
-
-                    if (result.isFailure) {
-                        throw result.exceptionOrNull() ?: Exception("Chunk upload failed")
-                    }
-
-                    uploadedChunks++
-                    bytesUploaded += chunk.size
-                    val speedKbps = speedCalculator.onProgress(bytesUploaded)
-
-                    val chunkDuration = System.currentTimeMillis() - chunkStartTime
-                    analytics.trackChunkUpload(taskId, chunk.chunkIndex, chunkDuration, true)
-
-                    val progress = (uploadedChunks * 100 / totalChunks)
-                    taskDao.updateProgress(
-                        taskId, progress, bytesUploaded, uploadedChunks, totalChunks, speedKbps
+                if (parallelChunks > 1 && totalChunks > 1) {
+                    uploadChunksParallel(
+                        file, taskId, session.sessionId, fileName, mimeType,
+                        totalBytes, totalChunks, parallelChunks
                     )
-
-                    setProgress(
-                        workDataOf(
-                            PROGRESS to progress,
-                            BYTES_UPLOADED to bytesUploaded,
-                            TOTAL_BYTES to totalBytes,
-                            CURRENT_CHUNK to uploadedChunks,
-                            TOTAL_CHUNKS to totalChunks,
-                            SPEED_KBPS to speedKbps
-                        )
+                } else {
+                    uploadChunksSequential(
+                        file, taskId, session.sessionId, fileName, mimeType,
+                        totalBytes, totalChunks
                     )
-
-                    // UPDATE NOTIFICATION AFTER EACH CHUNK
-                    setForeground(createForegroundInfo(taskId, fileName, progress, bytesUploaded, totalBytes))
                 }
 
                 taskDao.updateStatus(taskId, "VERIFYING")
@@ -176,8 +148,6 @@ class UploadWorker @AssistedInject constructor(
                         val duration = System.currentTimeMillis() - startTime
                         taskDao.markCompleted(taskId, body.remoteUrl, body.fileId)
                         analytics.trackUploadSuccess(taskId, duration, totalBytes)
-
-                        // Show completion notification
                         showCompleteNotification(taskId, fileName)
 
                         Result.success(
@@ -194,7 +164,6 @@ class UploadWorker @AssistedInject constructor(
                 }
 
             } catch (e: Exception) {
-                val duration = System.currentTimeMillis() - startTime
                 val retryCount = taskDao.getById(taskId)?.retryCount ?: 0
                 analytics.trackUploadFailure(taskId, e.message ?: "Unknown", retryCount)
                 showErrorNotification(taskId, fileName, e.message ?: "Error")
@@ -214,6 +183,142 @@ class UploadWorker @AssistedInject constructor(
         }
     }
 
+    private suspend fun uploadChunksSequential(
+        file: File,
+        taskId: String,
+        sessionId: String,
+        fileName: String,
+        mimeType: String,
+        totalBytes: Long,
+        totalChunks: Int
+    ) {
+        var uploadedChunks = chunkDao.getUploadedCount(taskId)
+        var bytesUploaded = uploadedChunks * (totalBytes / max(totalChunks, 1))
+
+        while (true) {
+            if (isStopped) {
+                taskDao.updateStatus(taskId, "PAUSED")
+                return
+            }
+
+            val chunk = chunkDao.getNextPendingChunk(taskId) ?: break
+
+            val chunkStartTime = System.currentTimeMillis()
+            val result = retryCoordinator.executeWithRetry(
+                maxRetries = 3,
+                isRetryable = { it is UnknownHostException || it is SocketTimeoutException }
+            ) {
+                chunkUploader.uploadChunk(file, chunk, taskId, sessionId, totalChunks, mimeType)
+            }
+
+            if (result.isFailure) {
+                throw result.exceptionOrNull() ?: Exception("Chunk upload failed")
+            }
+
+            uploadedChunks++
+            bytesUploaded += chunk.size
+            val speedKbps = speedCalculator.onProgress(bytesUploaded)
+            val etaSeconds = speedCalculator.getEtaSeconds(bytesUploaded, totalBytes)
+            val chunkDuration = System.currentTimeMillis() - chunkStartTime
+            analytics.trackChunkUpload(taskId, chunk.chunkIndex, chunkDuration, true)
+
+            reportProgress(taskId, fileName, uploadedChunks, totalChunks, bytesUploaded, totalBytes, speedKbps, etaSeconds)
+        }
+    }
+
+    private suspend fun uploadChunksParallel(
+        file: File,
+        taskId: String,
+        sessionId: String,
+        fileName: String,
+        mimeType: String,
+        totalBytes: Long,
+        totalChunks: Int,
+        parallelism: Int
+    ) {
+        val semaphore = Semaphore(parallelism)
+        val completedChunks = AtomicInteger(chunkDao.getUploadedCount(taskId))
+        val totalBytesUploaded = AtomicLong(
+            completedChunks.get().toLong() * (totalBytes / max(totalChunks, 1))
+        )
+
+        val allPendingChunks = chunkDao.getByTaskId(taskId).filter { !it.isUploaded }
+
+        coroutineScope {
+            val jobs = allPendingChunks.map { chunk ->
+                async {
+                    if (isStopped) return@async
+
+                    semaphore.acquire()
+                    try {
+                        if (isStopped) return@async
+
+                        val chunkStartTime = System.currentTimeMillis()
+                        val result = retryCoordinator.executeWithRetry(
+                            maxRetries = 3,
+                            isRetryable = { it is UnknownHostException || it is SocketTimeoutException }
+                        ) {
+                            chunkUploader.uploadChunk(
+                                file, chunk, taskId, sessionId, totalChunks, mimeType
+                            )
+                        }
+
+                        if (result.isFailure) {
+                            throw result.exceptionOrNull() ?: Exception("Chunk ${chunk.chunkIndex} failed")
+                        }
+
+                        val uploaded = completedChunks.incrementAndGet()
+                        val bytes = totalBytesUploaded.addAndGet(chunk.size)
+                        val (speedKbps, etaSeconds) = synchronized(speedCalculator) {
+                            val speed = speedCalculator.onProgress(bytes)
+                            val eta = speedCalculator.getEtaSeconds(bytes, totalBytes)
+                            speed to eta
+                        }
+                        val chunkDuration = System.currentTimeMillis() - chunkStartTime
+                        analytics.trackChunkUpload(taskId, chunk.chunkIndex, chunkDuration, true)
+
+                        reportProgress(taskId, fileName, uploaded, totalChunks, bytes, totalBytes, speedKbps, etaSeconds)
+                    } finally {
+                        semaphore.release()
+                    }
+                }
+            }
+            jobs.forEach { it.await() }
+        }
+
+        if (isStopped) {
+            taskDao.updateStatus(taskId, "PAUSED")
+        }
+    }
+
+    private suspend fun reportProgress(
+        taskId: String,
+        fileName: String,
+        uploadedChunks: Int,
+        totalChunks: Int,
+        bytesUploaded: Long,
+        totalBytes: Long,
+        speedKbps: Double,
+        etaSeconds: Long = -1
+    ) {
+        val progress = if (totalChunks > 0) (uploadedChunks * 100 / totalChunks) else 0
+        taskDao.updateProgress(taskId, progress, bytesUploaded, uploadedChunks, totalChunks, speedKbps)
+
+        setProgress(
+            workDataOf(
+                PROGRESS to progress,
+                BYTES_UPLOADED to bytesUploaded,
+                TOTAL_BYTES to totalBytes,
+                CURRENT_CHUNK to uploadedChunks,
+                TOTAL_CHUNKS to totalChunks,
+                SPEED_KBPS to speedKbps,
+                ETA_SECONDS to etaSeconds
+            )
+        )
+
+        setForeground(createForegroundInfo(taskId, fileName, progress, bytesUploaded, totalBytes))
+    }
+
     private fun createForegroundInfo(
         taskId: String,
         fileName: String,
@@ -222,7 +327,6 @@ class UploadWorker @AssistedInject constructor(
         totalBytes: Long
     ): ForegroundInfo {
         createNotificationChannel()
-
         val notificationId = NOTIFICATION_ID_BASE + taskId.hashCode()
 
         val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)

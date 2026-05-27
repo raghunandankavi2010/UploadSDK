@@ -1,5 +1,6 @@
 package com.uploadsdk.domain.repository
 
+import com.uploadsdk.domain.model.ChunkInfo
 import com.uploadsdk.domain.model.UploadResult
 import com.uploadsdk.domain.model.UploadTask
 import kotlinx.coroutines.flow.Flow
@@ -16,4 +17,5 @@ interface UploadRepository {
     suspend fun getPendingUploads(): List<UploadTask>
     suspend fun clearCompletedUploads()
     suspend fun getUploadHistory(): List<UploadTask>
+    suspend fun getChunkProgress(taskId: String): List<ChunkInfo>
 }

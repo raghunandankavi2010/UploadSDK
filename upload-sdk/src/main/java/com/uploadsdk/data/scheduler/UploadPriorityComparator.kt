@@ -8,9 +8,9 @@ object UploadPriorityComparator : Comparator<UploadTaskEntity> {
         val priorityA = UploadPriority.valueOf(a.priority).ordinal
         val priorityB = UploadPriority.valueOf(b.priority).ordinal
         return if (priorityA != priorityB) {
-            priorityB - priorityA // Higher priority first
+            priorityB - priorityA
         } else {
-            (a.createdAt - b.createdAt).toInt() // Older first
+            a.createdAt.compareTo(b.createdAt)
         }
     }
 }

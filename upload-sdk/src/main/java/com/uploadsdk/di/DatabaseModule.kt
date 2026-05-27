@@ -21,9 +21,7 @@ object DatabaseModule {
             context,
             UploadDatabase::class.java,
             "upload_sdk_db"
-        )
-            .fallbackToDestructiveMigration()
-            .build()
+        ).build()
     }
 
     @Provides

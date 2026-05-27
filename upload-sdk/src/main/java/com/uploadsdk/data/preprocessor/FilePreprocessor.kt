@@ -10,18 +10,20 @@ import javax.inject.Singleton
 @Singleton
 class FilePreprocessor @Inject constructor(
     private val checksumCalculator: ChecksumCalculator,
-    private val thumbnailGenerator: ThumbnailGenerator
+    private val thumbnailGenerator: ThumbnailGenerator,
+    private val fileValidator: UploadFileValidator
 ) {
 
     suspend fun preprocess(task: UploadTask): PreprocessResult {
         val file = task.file
 
-        // Eligibility checks
-        if (!file.exists()) {
-            return PreprocessResult("", "", isEligible = false, rejectionReason = "File does not exist")
-        }
-        if (file.length() == 0L) {
-            return PreprocessResult("", "", isEligible = false, rejectionReason = "File is empty")
+        val validationResult = fileValidator.validate(file)
+        if (validationResult.isFailure) {
+            return PreprocessResult(
+                "", "",
+                isEligible = false,
+                rejectionReason = validationResult.exceptionOrNull()?.message ?: "Validation failed"
+            )
         }
 
         // MIME extraction
@@ -55,6 +57,5 @@ class FilePreprocessor @Inject constructor(
         val extension = file.extension.lowercase()
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
             ?: fallback
-            ?: "application/octet-stream"
     }
 }

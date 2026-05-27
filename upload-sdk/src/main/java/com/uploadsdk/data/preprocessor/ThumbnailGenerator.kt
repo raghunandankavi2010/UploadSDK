@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.media.ThumbnailUtils
 import android.provider.MediaStore
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import javax.inject.Inject
@@ -15,8 +17,8 @@ class ThumbnailGenerator @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
-    suspend fun generate(file: File, mimeType: String): String? {
-        return try {
+    suspend fun generate(file: File, mimeType: String): String? = withContext(Dispatchers.IO) {
+        try {
             when {
                 mimeType.startsWith("image/") -> generateImageThumbnail(file)
                 mimeType.startsWith("video/") -> generateVideoThumbnail(file)
